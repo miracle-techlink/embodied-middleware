@@ -59,5 +59,10 @@ bash scripts/install_no_camera_probe.sh
   或先试 `scripts/usbreset_orbbec.py` 免拔插复位。枚举后确认 `lsusb -t` 里它在 5000M  hub 下。
 - **别让 Orbbec 和别的设备挤一个 USB2 hub**:实测它曾和 1080P 相机 + PCAN + CH341 同挂一个
   480M hub,采集必炸带宽。
+- **Orbbec 固件一次性会话**:任何会话结束(含正常退出,SDK 销毁会崩溃)固件即卡死,
+  下次 connect 报 `statusCode 8`。`record_rebot_gated.sh` 启动前已自动 USB 复位;
+  复位后到录制开始前别用别的程序碰相机。软复位无效就物理拔插。
+- **前视相机用 by-id 路径**:`/dev/videoN` 编号重枚举会漂,`record_rebot_gated.sh` 默认已用
+  `/dev/v4l/by-id/usb-SN0002_...-video-index0`;新机器照 `v4l2-ctl --list-devices` 换一条。
 - **lerobot 升级会覆盖插件**(拷进源码树的安装方式)→ 升级后重跑 `setup_env.sh` 或三件套。
 - `udev trigger` 后 CAN 的 can 号可能漂 → 所以 `setup_rebot_can.sh` 默认自动探测而不是写死。

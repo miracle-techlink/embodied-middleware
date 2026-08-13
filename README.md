@@ -117,8 +117,9 @@ REPO_ID="Liuyue9698/rebot_pick_place_20260708_074051" RESUME=1 EPISODES=50 \
 
 ## 常见问题
 
-- **Orbbec 抓帧超时 / 卡死**:根因是**上次进程异常退出**(core dump / `kill -9`)没走到 `pipeline.stop()`,相机会话泄漏,下次开流拿不到帧。现在 `connect()` **会自愈**:warmup 拿不到帧时自动 USB 复位该相机并重试一次(`reset_on_stall=True`,默认开)。若仍失败可手动 `python scripts/usbreset_orbbec.py`。**根治办法是别用 `kill -9` 停**(用 `Ctrl-C`/`q` 优雅退出,相机会干净关闭)。
-- **`can*` / `/dev/video*` 号变了**:USB 重新枚举会漂。`setup_rebot_can.sh` 自动找 PCAN 接口;相机用 `motorbridge-cli` / `v4l2-ctl --list-devices` 重认。
+- **Orbbec 抓帧超时 / 卡死 / `statusCode 8`(setXu failed, propertyId 42)**:固件是**一次性会话** —— 任何会话结束后(包括正常退出:pyorbbecsdk 销毁时会 `terminate called without an active exception` 崩溃,以及 `kill -9`/core dump)固件都会卡死,下次 connect 必报 statusCode 8。两层自愈:① `connect()` warmup 拿不到帧自动 USB 复位重试(`reset_on_stall=True`,默认开);② `record_rebot_gated.sh` **启动前无条件 USB 复位**(`ORBBEC_RESET=0` 可关),保证每次从干净状态开流。推论:**复位和录制之间不要用任何别的程序碰相机**(find_cameras/测试脚本都会消耗掉唯一的干净会话);软复位救不回就物理拔插(断电重启固件)。
+- **rerun 没有画面**:九成是相机 connect 失败被容错摘除(`相机 'xxx' 接入失败...已摘除`),录是还在录但没有图像流。排查:① 终端有没有「已摘除」日志;② `ls -l /proc/<record_pid>/fd | grep -oE "video[0-9]+|bus/usb"` 确认进程真的持有相机;③ **检查 shell 里残留的 `FRONT_CAM`/`WRIST_CAM` 环境变量** —— export 过的旧值会覆盖脚本修好的默认值(踩过:export 了 `/dev/video0`,重枚举后那是 Orbbec 的节点);④ Orbbec 见上一条。
+- **`can*` / `/dev/video*` 号变了**:USB 重新枚举会漂。`setup_rebot_can.sh` 自动找 PCAN 接口;相机**别用 `/dev/videoN`,用 by-id 稳定路径**(`/dev/v4l/by-id/usb-<型号>_<序列号>-video-index0`,重枚举不变)—— `record_rebot_gated.sh` 的 `FRONT_CAM` 默认已改成这种写法,换机器时照 `v4l2-ctl --list-devices` 抄一条即可。
 - **CAN 反复掉线**(`-71 Rx urb aborted` / `can0 removed` / `Network is down` / `No such device`):PCAN 在共享 USB2 hub 上被 **USB autosuspend** 连累掉线(实测每 ~77s 掉一次)。跑 **`sudo bash scripts/install_can_udev.sh`** 装持久 udev 规则(关 autosuspend + 掉线后自动拉起 can 口),掉线频率降 3×、且 re-attach 自愈。**根治**:把 PCAN 插独立/直连主板 USB 口,别用共享 hub。残留偶发掉线由采集脚本的单条错误隔离兜底(只丢一条)。
 - **`Unsupported video codec: libsvtav1`**:某些 pyav 构建没有 svtav1。脚本已默认 `--dataset.rgb_encoder.vcodec=h264`(深度用 hevc)。
 - **带深度录制崩在 `save_episode`**(`gray12le not supported` / `canonical_name` / `add_stream_from_template`):都是这台 pyav 版本偏旧、缺若干 API。跑 `bash lerobot_plugins/install_depthfix.sh` 一次性打 5 处兼容补丁(编码构造器 / 解码读 plane / codec.name 回退 / add_stream(template=) 拼接),保持 gray12le/hevc/mp4 无损。lerobot 升级会覆盖 → 重跑该脚本。
