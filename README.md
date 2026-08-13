@@ -10,17 +10,6 @@
 - **绝对映射遥操作**:leader 标定零位恒定对应从臂 home,进入遥操作即对上主臂**绝对位姿**(不是把「进入那一刻」当零位);启动这一跳由 teleop 端限速 ramp 平滑滑过去,不暴力弹射。见 `starai_to_rebot_leader`。
 - **带深度**:腕部 Orbbec Gemini 305 输出彩色 + 软件 D2C 对齐深度(`observation.images.wrist` / `wrist_depth`,uint16 毫米),LeRobot 自动用深度编码器保存。
 - **闸门式采集**:`record_rebot_gated.py` —— 每条固定时长 → 当场选保留/丢弃 → 回车开始下一条(比官方自动连录更适合精细任务)。
-- **设备容错接入**:相机逐个尝试、掉线摘除继续(`allow_missing_cameras`,默认开),`required_cameras` 名单内仍 fatal;`allow_missing_arm=true` 开纯相机模式(臂 CAN 掉了也能录,电机补零、action 透传)。坏固件相机(拒绝 SET 命令)配置里 `fps/width/height/fourcc` 全留空即可出流。
-
-## 两条栈
-
-| 目录 | 栈 | 说明 |
-|---|---|---|
-| `lerobot_plugins/` | LeRobot 原生 | 单进程直连硬件,`lerobot-teleoperate` / `lerobot-record` 驱动 |
-| `ros2/` | ROS2 消息中心 | 设备驱动节点 + topic(Agilex schema),控制回路节点自持 100Hz,与录制解耦;见 `ros2/README.md` |
-
-**⚠️ 两套别同时跑**:串口和 CAN 都是独占资源。映射数学两条栈共用
-`lerobot_plugins/teleoperators/starai_to_rebot_leader/mapping.py`(ROS2 侧 import 它),改映射只改这一处。
 
 ## 硬件
 

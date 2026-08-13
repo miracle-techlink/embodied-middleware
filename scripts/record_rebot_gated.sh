@@ -22,8 +22,8 @@ set -e
 PY="${PY:-python}"
 LEADER_PORT="${LEADER_PORT:-/dev/ttyCH341USB0}"
 CAN="${CAN:-can0}"                                   # PCAN reBot 总线(USB 重枚举后现在是 can0)
-WRIST_CAM="${WRIST_CAM:-CV275610002L}"
-FRONT_CAM="${FRONT_CAM:-/dev/video10}"               # 1080P USB 相机(USB 重枚举后现在是 /dev/video10)
+WRIST_CAM="${WRIST_CAM:-CV2856D0006R}"
+FRONT_CAM="${FRONT_CAM:-/dev/v4l/by-id/usb-SN0002_1080P_USB_Camera_44434000_P030C01_SN0002-video-index0}"  # by-id 稳定路径,videoN 编号重枚举后会变,别用 /dev/videoN
 REPO_ID="${REPO_ID:?请设 REPO_ID=你的用户名/数据集名}"
 TASK="${TASK:?请设 TASK=\"任务自然语言描述\"}"
 EPISODES="${EPISODES:-50}"
@@ -33,6 +33,15 @@ PUSH="${PUSH:-false}"
 
 BIN_DIR="$(dirname "$("$PY" -c 'import sys; print(sys.executable)')")"
 export PATH="$BIN_DIR:$PATH"
+
+# Orbbec 固件「一次性会话」坑:任何会话结束后(包括正常 disconnect —— SDK 退出时会
+# 崩溃 terminate called,以及异常被杀)固件都会卡死,下次 connect 必报 statusCode 8
+# (setXu failed)。所以每次启动前自动 USB 复位,保证从干净状态开流。ORBBEC_RESET=0 可关。
+if [ "${ORBBEC_RESET:-1}" = "1" ]; then
+  echo "[orbbec] 启动前 USB 复位(固件一次性会话坑,ORBBEC_RESET=0 可关)..."
+  "$PY" "$(dirname "${BASH_SOURCE[0]}")/usbreset_orbbec.py" || echo "[orbbec] 复位失败,继续尝试直连"
+  sleep 4
+fi
 
 USE_DEPTH="true"; [ "${NO_DEPTH:-0}" = "1" ] && USE_DEPTH="false"
 CAMS="{ wrist: {type: orbbec, serial_number_or_name: ${WRIST_CAM}, fps: ${FPS}, width: 640, height: 480, color_format: ${CAM_FORMAT:-mjpg}, use_depth: ${USE_DEPTH}, align_mode: ${ALIGN_MODE:-sw}, warmup_s: ${WARMUP:-15}}, front: {type: opencv, index_or_path: ${FRONT_CAM}, fps: ${FPS}, width: 640, height: 480, backend: V4L2, fourcc: MJPG} }"

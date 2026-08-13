@@ -34,6 +34,12 @@ sudo usermod -aG dialout $USER     # 重新登录生效
 
 # 每次采集前拉起 CAN(脚本自动找 peak_usb 接口)
 sudo bash scripts/setup_rebot_can.sh
+
+# 采集四设备禁 USB autosuspend(Orbbec 挂起=取帧超时;四设备同时掉线事件后必装)
+sudo bash scripts/install_usb_noautosuspend.sh
+
+# GNOME 桌面机必装:禁 pipewire 探测 1080P 相机(否则它反复 5s 超时卡死 USB 栈 → 鼠标跳帧)
+bash scripts/install_no_camera_probe.sh
 ```
 
 ## 4. 硬件端口核对清单
