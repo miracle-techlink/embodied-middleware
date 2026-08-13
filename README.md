@@ -59,6 +59,13 @@ joint_state 200Hz std 0.10ms;record 循环观测+动作 0.07ms。
 
 ## 注意
 
+- **USB 拓扑(2026-08-13 查实)**:整套采集挂在一个 480M USB2 hub 上(Bus5→5-1),
+  Orbbec 被压成 USB2(只能靠 mjpg);**Bus6 上有个空 USB3 hub —— Orbbec 挪过去是
+  最治本的一招**。母仓 SETUP_LOG 也明确"适配器直插 Jetson,别经拓展坞"。
+- **autosuspend 已关(会话级)**:Orbbec/前视默认 `power/control=auto`,挂起即取帧
+  超时;已 `echo on` 修正,重启/重插后失效,持久化需加 udev 规则(见下)。
+- **USB 软复位**:`src/rebot_msg_center/scripts/usb_reset.py [orbbec|pcan|ch341|frontcam]`
+  (需 sudo),USBDEVFS_RESET 免拔插;复位后重启对应节点即可。
 - **UVC 节点号会漂**:前视相机这次是 /dev/video0(旧脚本写死 /dev/video10)。用
   `FRONT_CAM=/dev/v4l/by-path/...` 环境变量指定稳定路径更靠谱。
 - **QoS**:所有 topic 是 BEST_EFFORT keep-last 1,订阅方必须匹配(RELIABLE 订阅会
