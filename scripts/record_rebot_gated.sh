@@ -6,6 +6,8 @@
 #           bash scripts/record_rebot_gated.sh [额外 --key=val ...]
 #   环境变量: PY / LEADER_PORT / CAN / WRIST_CAM / FRONT_CAM / REPO_ID / TASK / EPISODES /
 #             EP_TIME(每条秒数,默认15) / PUSH / NO_DEPTH / WARMUP / FPS
+#             PREFLIGHT=0        跳过启动前设备自检(默认开:CAN/主臂/两相机缺一即 fail-fast)
+#             ORBBEC_RESET=0     跳过启动前 Orbbec USB 复位(默认开:固件一次性会话坑)
 #             DEPTH_PRESET(深度无损 x265 preset,默认 ultrafast。真实 Orbbec 深度实测:
 #                          medium 13.7s/27MB → ultrafast 3.3s(4×)/42MB(+56%) → superfast 6.0s(2.3×)/33MB(+22%)。
 #                          仍位精确无损;要省体积用 superfast,要最省磁盘用 medium)
@@ -22,8 +24,11 @@ set -e
 PY="${PY:-python}"
 LEADER_PORT="${LEADER_PORT:-/dev/ttyCH341USB0}"
 CAN="${CAN:-can0}"                                   # PCAN reBot 总线(USB 重枚举后现在是 can0)
+_ENV_WRIST="${WRIST_CAM-}"; _ENV_FRONT="${FRONT_CAM-}"   # 记住是否来自 shell 环境(踩过:export 了旧 /dev/videoN 覆盖脚本修好的默认值)
 WRIST_CAM="${WRIST_CAM:-CV2856D0006R}"
 FRONT_CAM="${FRONT_CAM:-/dev/v4l/by-id/usb-SN0002_1080P_USB_Camera_44434000_P030C01_SN0002-video-index0}"  # by-id 稳定路径,videoN 编号重枚举后会变,别用 /dev/videoN
+[ -n "$_ENV_WRIST" ] && echo "[cams] 注意: WRIST_CAM 被环境变量覆盖为 $_ENV_WRIST"
+[ -n "$_ENV_FRONT" ] && echo "[cams] 注意: FRONT_CAM 被环境变量覆盖为 $_ENV_FRONT"
 REPO_ID="${REPO_ID:?请设 REPO_ID=你的用户名/数据集名}"
 TASK="${TASK:?请设 TASK=\"任务自然语言描述\"}"
 EPISODES="${EPISODES:-50}"
@@ -34,12 +39,29 @@ PUSH="${PUSH:-false}"
 BIN_DIR="$(dirname "$("$PY" -c 'import sys; print(sys.executable)')")"
 export PATH="$BIN_DIR:$PATH"
 
+# 设备 preflight:缺设备直接 fail-fast 报可执行的修复提示,别带病启动 ——
+# 相机被容错摘除会录出无图像数据集;CAN 没起会崩在 disable_all;主臂不在会连不上。
+# PREFLIGHT=0 可跳过。
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ "${PREFLIGHT:-1}" = "1" ]; then
+  FAIL=0
+  [ "$(cat /sys/class/net/${CAN}/operstate 2>/dev/null)" = "up" ] \
+    || { echo "[preflight] $CAN 不在 UP → sudo bash $SCRIPT_DIR/setup_rebot_can.sh"; FAIL=1; }
+  [ -e "$LEADER_PORT" ] \
+    || { echo "[preflight] 主臂串口 $LEADER_PORT 不存在 → 检查 USB 连接 / udev 规则(99-starai-leader)"; FAIL=1; }
+  [ -e "$FRONT_CAM" ] \
+    || { echo "[preflight] 前视相机 $FRONT_CAM 不存在 → v4l2-ctl --list-devices 重认(用 by-id 路径,别用 /dev/videoN)"; FAIL=1; }
+  lsusb 2>/dev/null | grep -q "2bc5:" \
+    || { echo "[preflight] 枚举不到 Orbbec(2bc5) → 检查 USB(直插主板口,别上共享 hub)"; FAIL=1; }
+  [ "$FAIL" = "1" ] && exit 1
+fi
+
 # Orbbec 固件「一次性会话」坑:任何会话结束后(包括正常 disconnect —— SDK 退出时会
 # 崩溃 terminate called,以及异常被杀)固件都会卡死,下次 connect 必报 statusCode 8
 # (setXu failed)。所以每次启动前自动 USB 复位,保证从干净状态开流。ORBBEC_RESET=0 可关。
 if [ "${ORBBEC_RESET:-1}" = "1" ]; then
   echo "[orbbec] 启动前 USB 复位(固件一次性会话坑,ORBBEC_RESET=0 可关)..."
-  "$PY" "$(dirname "${BASH_SOURCE[0]}")/usbreset_orbbec.py" || echo "[orbbec] 复位失败,继续尝试直连"
+  "$PY" "$SCRIPT_DIR/usbreset_orbbec.py" || echo "[orbbec] 复位失败,继续尝试直连"
   sleep 4
 fi
 
@@ -59,9 +81,14 @@ fi
 # 非阻塞相机:默认开(29.9→76.9Hz,已验证)。NONBLOCK=0 回退官方阻塞 async_read
 [ "${NONBLOCK:-1}" = "0" ] && OPT_ARG+=(--robot.cameras_nonblocking=false)
 # 续录:RESUME=1 + REPO_ID=完整已存在数据集名(含时间戳)→ 接着往同一数据集录,不新建
-[ "${RESUME:-0}" = "1" ] && OPT_ARG+=(--resume=true)
+# resume() 必须显式 --dataset.root(否则会崩 "resume() requires an explicit 'root'")——
+# 本地数据集默认落在 HF_LEROBOT_HOME/<repo_id>,这里自动推导并先验存在性。
+if [ "${RESUME:-0}" = "1" ]; then
+  LROOT="${HF_LEROBOT_HOME:-$HOME/.cache/huggingface/lerobot}/${REPO_ID}"
+  [ -d "$LROOT" ] || { echo "[resume] 目标数据集不存在: $LROOT(REPO_ID 要给带时间戳的完整名)"; exit 1; }
+  OPT_ARG+=(--resume=true --dataset.root="$LROOT")
+fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec "$PY" "$SCRIPT_DIR/record_rebot_gated.py" \
   --robot.type=rebot_follower --robot.id=follower1 \
   --robot.port="${CAN}" --robot.can_adapter=socketcan \

@@ -71,6 +71,24 @@ def main(cfg: RecordConfig) -> None:
         init_visualization(
             cfg.display_mode, session_name="recording", ip=cfg.display_ip, port=cfg.display_port
         )
+        # 看门狗:启动阶段(resume/建数据集/connect 任一步)崩了,主 try/finally 还没挂上,
+        # 孤儿 rerun 窗口会定格在最后一帧,看着像"卡死"(踩过)。atexit 在正常退出和
+        # 未捕获异常/KeyboardInterrupt 时都会跑:断流 + 收掉本次 spawn 的 viewer。
+        import atexit
+        import subprocess
+
+        def _close_viewer_on_crash():
+            try:
+                shutdown_visualization(cfg.display_mode)
+            except Exception:
+                pass
+            try:
+                subprocess.run(["pkill", "-f", "bin/rerun --port=9876"],
+                               timeout=3, capture_output=True)
+            except Exception:
+                pass
+
+        atexit.register(_close_viewer_on_crash)
 
     robot = make_robot_from_config(cfg.robot)
     teleop = make_teleoperator_from_config(cfg.teleop)
