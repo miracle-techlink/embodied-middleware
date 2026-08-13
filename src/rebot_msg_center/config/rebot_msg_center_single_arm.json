@@ -1,0 +1,58 @@
+{
+  "ros_topics": [
+    {
+      "enable": true,
+      "topic_name": "/rebot/leader/joint_state",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 100,
+      "producer": "starai_leader_node",
+      "description": "StarAI Violin 主臂 6 关节 + 夹爪,position 为度(标定零位基准),夹爪为 [0,1] 开度比"
+    },
+    {
+      "enable": true,
+      "topic_name": "/rebot/follower/joint_cmd",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 100,
+      "producer": "teleop_map_node",
+      "description": "reBot 从臂 7 关节绝对目标角(度),rebot_arm_node 订阅并下发 CAN"
+    },
+    {
+      "enable": true,
+      "topic_name": "/rebot/follower/joint_state",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 200,
+      "producer": "rebot_arm_node",
+      "description": "reBot 从臂 7 关节反馈:position=度,velocity=度/秒,effort=力矩"
+    },
+    {
+      "enable": true,
+      "topic_name": "/rebot/wrist/color/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "orbbec_node",
+      "description": "腕部 Orbbec 彩色,jpeg 压缩"
+    },
+    {
+      "enable": true,
+      "topic_name": "/rebot/wrist/depth/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "orbbec_node",
+      "description": "腕部 Orbbec 对齐深度,uint16 毫米,format='16UC1; png compressed'"
+    },
+    {
+      "enable": true,
+      "topic_name": "/rebot/front/color/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "uvc_node",
+      "description": "前视 UVC 相机彩色,jpeg 压缩"
+    }
+  ]
+}
