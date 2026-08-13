@@ -8,6 +8,8 @@
 #             EP_TIME(每条秒数,默认15) / PUSH / NO_DEPTH / WARMUP / FPS
 #             PREFLIGHT=0        跳过启动前设备自检(默认开:CAN/主臂/两相机缺一即 fail-fast)
 #             ORBBEC_RESET=0     跳过启动前 Orbbec USB 复位(默认开:固件一次性会话坑)
+#             GRIP_KP / GRIP_CLAMP  夹爪力度(MIT 刚度,默认 9.0)/ 闭合过冲(度,默认 25)。
+#                                捏手/软物体数据建议 GRIP_KP=3.0 GRIP_CLAMP=10
 #             DEPTH_PRESET(深度无损 x265 preset,默认 ultrafast。真实 Orbbec 深度实测:
 #                          medium 13.7s/27MB → ultrafast 3.3s(4×)/42MB(+56%) → superfast 6.0s(2.3×)/33MB(+22%)。
 #                          仍位精确无损;要省体积用 superfast,要最省磁盘用 medium)
@@ -82,6 +84,10 @@ if [ "${STREAM_ENCODE:-0}" = "1" ]; then
 fi
 # 非阻塞相机:默认开(29.9→76.9Hz,已验证)。NONBLOCK=0 回退官方阻塞 async_read
 [ "${NONBLOCK:-1}" = "0" ] && OPT_ARG+=(--robot.cameras_nonblocking=false)
+# 夹爪手感:力度 = MIT 刚度 grip_kp × 过冲 grip_clamp_deg。捏手/软物体数据建议
+# GRIP_KP=3.0 GRIP_CLAMP=10(默认 9.0/25 夹得很疼);不设则用插件默认值
+[ -n "${GRIP_KP:-}" ] && OPT_ARG+=(--robot.grip_kp="${GRIP_KP}")
+[ -n "${GRIP_CLAMP:-}" ] && OPT_ARG+=(--teleop.grip_clamp_deg="${GRIP_CLAMP}")
 # 续录:RESUME=1 + REPO_ID=完整已存在数据集名(含时间戳)→ 接着往同一数据集录,不新建
 # resume() 必须显式 --dataset.root(否则会崩 "resume() requires an explicit 'root'")——
 # 本地数据集默认落在 HF_LEROBOT_HOME/<repo_id>,这里自动推导并先验存在性。
