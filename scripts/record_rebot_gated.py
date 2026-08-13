@@ -57,6 +57,10 @@ def _ask(prompt: str) -> str:
         return input(prompt).strip().lower()
     except EOFError:
         return "q"
+    except KeyboardInterrupt:
+        # 闸门提示符前 Ctrl+C = 优雅退出(落盘已录),不要甩一屏 traceback
+        print()
+        return "q"
 
 
 @parser.wrap()

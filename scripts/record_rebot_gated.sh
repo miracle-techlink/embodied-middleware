@@ -31,6 +31,8 @@ FRONT_CAM="${FRONT_CAM:-/dev/v4l/by-id/usb-SN0002_1080P_USB_Camera_44434000_P030
 [ -n "$_ENV_FRONT" ] && echo "[cams] 注意: FRONT_CAM 被环境变量覆盖为 $_ENV_FRONT"
 REPO_ID="${REPO_ID:?请设 REPO_ID=你的用户名/数据集名}"
 TASK="${TASK:?请设 TASK=\"任务自然语言描述\"}"
+# TASK 别用占位符:YAML 里 `...` 是文档结束符,draccus 解析直接崩(踩过)
+[ "$TASK" = "..." ] && { echo "[preflight] TASK=\"...\" 是占位符,请换成真实任务描述(YAML 保留字会崩解析)"; exit 1; }
 EPISODES="${EPISODES:-50}"
 EP_TIME="${EP_TIME:-15}"                             # 每条固定时长(秒)
 FPS="${FPS:-30}"
