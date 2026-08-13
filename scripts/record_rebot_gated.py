@@ -87,7 +87,9 @@ def main(cfg: RecordConfig) -> None:
             except Exception:
                 pass
             try:
-                subprocess.run(["pkill", "-f", "bin/rerun --port=9876"],
+                # 模式要同时命中 wrapper(.../bin/rerun --port=9876)和真正的 Rust
+                # viewer(.../rerun_cli/rerun --port=9876)——只杀 wrapper 窗口会留着
+                subprocess.run(["pkill", "-f", "rerun --port=9876"],
                                timeout=3, capture_output=True)
             except Exception:
                 pass
@@ -129,6 +131,17 @@ def main(cfg: RecordConfig) -> None:
             image_writer_threads=(cfg.dataset.num_image_writer_threads_per_camera * num_cams) if num_cams else 0,
         )
         logger.info(f"RESUME: 续录 {dataset.repo_id},已有 {dataset.num_episodes} 条")
+        # schema 兼容检查:续录库的图像特征必须与本次相机配置完全一致 —— 否则录第一条才
+        # 在 record_loop 里炸 KeyError(踩过:旧库带 wrist_depth,本次 NO_DEPTH=1)。
+        ds_imgs = {k for k in dataset.features if k.startswith("observation.images.")}
+        new_imgs = {k for k in dataset_features if k.startswith("observation.images.")}
+        missing, extra = ds_imgs - new_imgs, new_imgs - ds_imgs
+        if missing or extra:
+            raise ValueError(
+                f"续录数据集 schema 与本次相机配置不一致:库里有而本次没有 {sorted(missing)},"
+                f"本次新增 {sorted(extra)}。请保持相机/深度配置与建库时一致"
+                f"(如旧库带深度就去掉 NO_DEPTH=1),或换新 REPO_ID 开录。"
+            )
     else:
         cfg.dataset.stamp_repo_id()
         dataset = LeRobotDataset.create(
