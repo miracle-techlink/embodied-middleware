@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rebot_msg_center</name>
+  <version>0.1.0</version>
+  <description>reBot 单臂采集栈的 ROS2 消息中心:设备驱动节点(arm/leader/camera)+ JSON 话题注册表 + teleop 映射节点。JSON schema 模仿 AgilexCobotMagic msg_center。</description>
+  <maintainer email="will@example.com">will</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

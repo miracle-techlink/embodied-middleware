@@ -42,9 +42,13 @@ def main(cfg: RecordConfig) -> None:
         robot.get_observation(); teleop.get_action()
 
     t_obs, t_act, t_send, t_total = [], [], [], []
+    # PACE_FPS>0(默认 30):按真实采集节奏限速循环 —— get_action 缓存化后裸奔会
+    # 以数百 Hz 灌 SocketCAN TX 队列(ENOBUFS),测出来的不是真实工况。
+    pace_fps = float(os.environ.get("PACE_FPS", "30"))
     try:
         for i in range(iters):
-            s0 = time.perf_counter()
+            loop_start = time.perf_counter()
+            s0 = loop_start
             robot.get_observation()
             s1 = time.perf_counter()
             act = teleop.get_action()
@@ -52,6 +56,10 @@ def main(cfg: RecordConfig) -> None:
             robot.send_action(act)
             s3 = time.perf_counter()
             t_obs.append(s1 - s0); t_act.append(s2 - s1); t_send.append(s3 - s2); t_total.append(s3 - s0)
+            if pace_fps > 0:
+                dt = time.perf_counter() - loop_start
+                if dt < 1.0 / pace_fps:
+                    time.sleep(1.0 / pace_fps - dt)
             if (i + 1) % 60 == 0:
                 print(f"  {i+1}/{iters}  total {mean(t_total[-60:])*1e3:.1f}ms")
     finally:

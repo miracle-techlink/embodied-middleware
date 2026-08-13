@@ -71,6 +71,31 @@ class RebotFollowerConfig(SeeedB601RSFollowerConfig):
     cameras_nonblocking: bool = True
     stale_frame_ms: int = 200  # nonblocking 时,最新帧超过此龄触发告警+回退(暴露相机卡死)
 
+    # ---------- 设备容错接入 ----------
+    # True(默认)= connect 时相机逐个尝试,掉线/故障的相机摘除后继续,其余设备正常接入,
+    #   数据集特征随之少这一路(结构自洽,不会录进全黑帧);False 回退官方行为(任一相机失败
+    #   整体中止)。无论何值,required_cameras 名单内的相机失败仍然 fatal。
+    #   运行中相机死掉由 cameras_nonblocking 的 stale 回退兜住(告警+上一帧),不阻断循环;
+    #   is_connected 只看臂总线,相机掉线不会挡住退出时的 safe_zero/卸力矩(安全)。
+    # 注意:有的相机固件拒绝一切 SET 命令(如 1080P USB Camera 2bdf:0289,设 width/fourcc
+    #   直接失败被摘除)——给它配 fps/width/height/fourcc 全部留空(None),lerobot 会跳过
+    #   所有 SET 直接用相机原生默认(640x480 YUYV)出流,特征形状连接后从相机实际值取。
+    allow_missing_cameras: bool = True
+    required_cameras: list[str] = field(default_factory=list)
+
+    # False(默认)= 臂 CAN 总线连不上直接报错(通常意味着真故障:can0 没起/线没插)。
+    # True = 纯相机模式:臂连不上也继续,电机观测补零(数据集结构不变)、send_action
+    #   透传不执行 —— 主臂 teleop 还在的话,可以照常录"操作员意图 + 多视角视频",
+    #   适合臂送修/调试相机机位时不停工。录出的数据 observation.state 全零,训练前自行筛除。
+    allow_missing_arm: bool = False
+
+    def __post_init__(self):
+        """放宽 RobotConfig.__post_init__ 的相机 width/height/fps 必填校验:允许留 None
+        (= 不向相机发任何 SET 命令,用相机原生默认出流,迁就拒绝 SET 的坏固件相机),
+        特征形状连接后由 RebotFollower._cam_dims 从相机实际协商值解析。
+        RobotConfig.__post_init__ 只有这一个检查,覆盖它不跳过其他逻辑(已核对 0.6.1);
+        lerobot 升级时需重新核对 robots/config.py。"""
+
     # ---------- 夹爪(直驱 7 号电机,绕开官方力矩前馈路径) ----------
     # 官方 RS 夹爪走 send_mit(0,0,kp=0,kd=1.5,tau_ff),纯力矩前馈(力矩上限 10)推不动,
     # 且每周期在 send_action 里塞一句阻塞 poll_feedback_once 拖乱机械臂节奏。这里改为把夹爪

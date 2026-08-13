@@ -10,6 +10,17 @@
 - **绝对映射遥操作**:leader 标定零位恒定对应从臂 home,进入遥操作即对上主臂**绝对位姿**(不是把「进入那一刻」当零位);启动这一跳由 teleop 端限速 ramp 平滑滑过去,不暴力弹射。见 `starai_to_rebot_leader`。
 - **带深度**:腕部 Orbbec Gemini 305 输出彩色 + 软件 D2C 对齐深度(`observation.images.wrist` / `wrist_depth`,uint16 毫米),LeRobot 自动用深度编码器保存。
 - **闸门式采集**:`record_rebot_gated.py` —— 每条固定时长 → 当场选保留/丢弃 → 回车开始下一条(比官方自动连录更适合精细任务)。
+- **设备容错接入**:相机逐个尝试、掉线摘除继续(`allow_missing_cameras`,默认开),`required_cameras` 名单内仍 fatal;`allow_missing_arm=true` 开纯相机模式(臂 CAN 掉了也能录,电机补零、action 透传)。坏固件相机(拒绝 SET 命令)配置里 `fps/width/height/fourcc` 全留空即可出流。
+
+## 两条栈
+
+| 目录 | 栈 | 说明 |
+|---|---|---|
+| `lerobot_plugins/` | LeRobot 原生 | 单进程直连硬件,`lerobot-teleoperate` / `lerobot-record` 驱动 |
+| `ros2/` | ROS2 消息中心 | 设备驱动节点 + topic(Agilex schema),控制回路节点自持 100Hz,与录制解耦;见 `ros2/README.md` |
+
+**⚠️ 两套别同时跑**:串口和 CAN 都是独占资源。映射数学两条栈共用
+`lerobot_plugins/teleoperators/starai_to_rebot_leader/mapping.py`(ROS2 侧 import 它),改映射只改这一处。
 
 ## 硬件
 
@@ -25,13 +36,23 @@
 
 ```bash
 # 在你的 lerobot conda/venv 里
-pip install lerobot-robot-seeed-b601        # 官方 reBot RobStride follower(被 rebot_follower 继承)
+pip install lerobot-robot-seeed-b601        # 官方 reBot RobStride follower(被 rebot_follower 继承)+ motorbridge-cli
 pip install pyorbbecsdk2                      # Orbbec 相机(录深度需要)
-pip install fashionstar-uart-servo            # StarAI Violin 主臂舵机(uservo)
+pip install fashionstar-uart-sdk              # StarAI Violin 主臂舵机(import 名 uservo;不是 fashionstar-uart-servo!)
+pip install pyserial rerun-sdk                # 主臂串口 + --display_data 可视化
 # reBot CAN 需要 peak_usb 内核模块(PCAN-USB);Jetson 无此模块需自行 out-of-tree 编译
 ```
 
 ## 安装
+
+**全新机器一键安装**(独立 conda env + 独立 lerobot v0.6.1 克隆,不碰已有环境,多机采集直接照抄):
+
+```bash
+bash scripts/setup_env.sh                # 建 env(默认 data_collect)+ 克隆 lerobot + 装依赖 + 打插件
+WITH_SUDO=1 bash scripts/setup_env.sh    # 连 Orbbec udev 规则 / dialout 组一起配
+```
+
+**手动分步**(已有 lerobot 环境时):
 
 ```bash
 # 1) 把插件装进 lerobot 源码树并注册
@@ -42,6 +63,7 @@ LEROBOT_SRC=/path/to/lerobot bash lerobot_plugins/install_orbbec.sh
 LEROBOT_SRC=/path/to/lerobot bash lerobot_plugins/install_depthfix.sh
 ```
 > 注:插件是「拷进 lerobot 源码树」的方式,lerobot 升级会覆盖,升级后重跑 install。
+> 实测过的完整环境清单(含各 sudo 步骤、串口节点名差异、Orbbec 掉 USB2 的坑)见 [docs/ENV_SETUP.md](docs/ENV_SETUP.md)。
 
 ## 快速开始
 
@@ -87,6 +109,7 @@ REPO_ID="Liuyue9698/rebot_pick_place_20260708_074051" RESUME=1 EPISODES=50 \
 
 | 脚本 | 作用 |
 |---|---|
+| `scripts/setup_env.sh` | **一键环境**:conda env + lerobot 克隆 + 依赖 + 插件三件套(新机器/多机铺开用) |
 | `scripts/teleop_rebot.sh` | 空跑遥操作 + rerun 双视角(不写数据集) |
 | `scripts/record_rebot_gated.sh` / `.py` | **闸门式**采集(15s / 保留丢弃 / 回车下一条) |
 | `scripts/record_rebot.sh` | 官方自动连录(方向键控制,连续 N 条) |
