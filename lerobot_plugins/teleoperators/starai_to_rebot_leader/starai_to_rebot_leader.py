@@ -87,11 +87,23 @@ class StaraiToRebotLeader(Teleoperator):
     def configure(self) -> None:
         pass
 
-    def rearm_ramp(self) -> None:
+    def rearm_ramp(
+        self,
+        step_deg_per_step: float | None = None,
+        current_deg: list[float] | None = None,
+    ) -> None:
         """重新武装启动限速 ramp:下一次 get_action 从**当前保持位**平滑滑到 leader 当前
         绝对位姿,而不是直通。闸门式采集里每条开录前调用 —— 因为"回车等待"期间机械臂冻结、
-        主臂可能被挪动,不重新限速则下一条起步会无限速弹射。"""
-        self._map.rearm_ramp()
+        主臂可能被挪动,不重新限速则下一条起步会无限速弹射。
+        ``step_deg_per_step`` 给定时本次 ramp 用慢速(开录前对齐用),收敛后自动恢复默认。
+        ``current_deg`` = 从臂实际当前位(6 关节度,action 空间):臂被 safe_zero 等外部
+        移动过后必须传,否则 ramp 从记忆位起步第一帧就跳变。"""
+        self._map.rearm_ramp(step_deg_per_step, current_deg)
+
+    @property
+    def ramp_converged(self) -> bool:
+        """启动 ramp 是否已收敛(从臂输出已跟上主臂当前位姿)。"""
+        return self._map.ramp_converged
 
     # ---------------- action ----------------
     def get_action(self) -> dict[str, float]:

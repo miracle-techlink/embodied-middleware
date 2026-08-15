@@ -19,6 +19,27 @@ FRONT_CAM="${FRONT_CAM:-/dev/video4}"                 # 第二视角 USB 摄像�
 BIN_DIR="$(dirname "$("$PY" -c 'import sys; print(sys.executable)')")"
 export PATH="$BIN_DIR:$PATH"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# CAN 不在 UP 自动拉起;电机 ACK 探测(断电/急停时总线静默,connect 才炸 control ack timeout,
+# 提前拦)。探不通自动重拉 CAN 再探一次。PREFLIGHT=0 / ARM_PROBE=0 可分别跳过。
+if [ "${PREFLIGHT:-1}" = "1" ]; then
+  if [ "$(cat /sys/class/net/${CAN}/operstate 2>/dev/null)" != "up" ]; then
+    echo "[preflight] $CAN 不在 UP,自动拉起(sudo 可能问密码)..."
+    sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" \
+      || { echo "[preflight] $CAN 拉起失败 → 手动跑: sudo bash $SCRIPT_DIR/setup_rebot_can.sh"; exit 1; }
+  fi
+  if [ "${ARM_PROBE:-1}" = "1" ]; then
+    if ! "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN"; then
+      echo "[preflight] 电机无 ACK,自动重拉 CAN 再探一次..."
+      sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" || true
+      sleep 1
+      "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN" \
+        || { echo "[preflight] 重拉 CAN 后电机仍静默 → 检查:臂电源开关 / 急停按钮 / CAN 线。"; exit 1; }
+    fi
+  fi
+fi
+
 USE_DEPTH="true"; [ "${NO_DEPTH:-0}" = "1" ] && USE_DEPTH="false"
 CAM_ARG=()
 if [ "${NO_CAM:-0}" != "1" ]; then

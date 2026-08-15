@@ -2,9 +2,20 @@
 """闸门式数据采集(单臂 reBot + 腕部深度 + front 第二视角)。
 
 与 ``lerobot-record`` 的区别:把"到点自动连录下一条"换成**人工闸门**——
-  1. 每条固定时长(默认 ``--dataset.episode_time_s=15`` 秒;录制中按方向键→可提前结束);
-  2. 录完当场选择**保留 / 丢弃重录**;
-  3. **回车**才开始录制下一条。
+  1. 回车后:**从臂存活探测**(断电/CAN 静默提前拦截)→ 从臂**回零位** → **3 2 1** 倒计时
+     → **慢速对齐主臂**(回零位 → 主臂当前位姿,限速 ~30°/s,不跳变)→ 才开始录;
+  2. 每条固定时长(默认 ``--dataset.episode_time_s=15`` 秒;录制中按方向键→可提前结束),
+     **最后 5 秒终端给 5 4 3 2 1 倒计时**;录完**自动回零**(兼作断电探测器)再问你;
+  3. 录完当场选择**保留 / 丢弃重录**;任意阶段 Ctrl-C 优雅收尾,不甩 traceback。
+
+节奏环境变量(``os.environ`` 直读,不进 CLI):
+  ``ZERO_BEFORE_EPISODE=0``  关掉每条开录前的从臂回零(默认开)
+  ``ZERO_AFTER_EPISODE=0``   关掉每条结束后的自动回零(默认开)
+  ``ALIGN_LEADER=0``         关掉开录前的慢速对齐主臂(默认开)
+  ``ALIGN_STEP_DEG``         对齐限速(度/帧,默认 1.0 ≈ 30°/s @30fps)
+  ``ALIGN_TIMEOUT_S``        对齐超时秒数(默认 20)
+  ``START_COUNTDOWN``        开录前倒计时秒数(默认 3,0=关)
+  ``END_COUNTDOWN``          结束前倒计时秒数(默认 5,0=关)
 
 其余全部复用 lerobot 官方栈:同一套 config 解析(CLI 与 lerobot-record 完全一致:
 ``--robot.* --teleop.* --dataset.* --display_data`` ...)、同一个 ``record_loop`` 录制循环、
@@ -14,6 +25,10 @@
 """
 
 import logging
+import math
+import os
+import threading
+import time
 from dataclasses import asdict
 from pprint import pformat
 
@@ -61,6 +76,132 @@ def _ask(prompt: str) -> str:
         # 闸门提示符前 Ctrl+C = 优雅退出(落盘已录),不要甩一屏 traceback
         print()
         return "q"
+
+
+def _countdown(n: int, label: str, stop: threading.Event | None = None) -> None:
+    """同行刷新打印 n..1,每秒一拍;给了 stop 事件则可被即时打断(提前结束本条的场景)。"""
+    for i in range(n, 0, -1):
+        if stop is not None and stop.is_set():
+            return
+        print(f"\r{label} {i}   ", end="", flush=True)
+        t_end = time.monotonic() + 1.0
+        while time.monotonic() < t_end:
+            if stop is not None and stop.is_set():
+                return
+            time.sleep(0.05)
+    print()
+
+
+def _start_end_countdown(ep_time_s: float, n: int) -> tuple[threading.Event, threading.Thread]:
+    """后台线程:睡到本条剩余 n 秒,然后开始 5 4 3 2 1。stop 置位即静默退出
+    (录制被 →/Esc 提前结束、或 record_loop 出错时,残留倒计时不该继续吵)。"""
+    stop = threading.Event()
+
+    def _run() -> None:
+        lead = ep_time_s - n
+        t_end = time.monotonic() + max(lead, 0.0)
+        while time.monotonic() < t_end:
+            if stop.is_set():
+                return
+            time.sleep(0.1)
+        print()  # 让出 record_loop 可能正在刷新的行
+        _countdown(n, "⏳ 本条剩余", stop)
+
+    th = threading.Thread(target=_run, daemon=True)
+    th.start()
+    return stop, th
+
+
+def _arm_alive(robot, attempts: int = 2) -> bool:
+    """从臂存活探测:逐台 robstride_ping(与 motorbridge-cli scan 同机制),有应答才算在线。
+    电机断电/CAN 静默时 socketcan 写入并不报错(没人 ACK 而已),会录出整段废数据。
+    别用 request_feedback + get_state 探:空闲臂不回反馈包,会误报全静默(踩过 2026-08-15)。"""
+    motors = getattr(robot, "motors", None)
+    if not motors:
+        return True  # 纯相机模式(allow_missing_arm):无从臂可探
+    for _ in range(attempts):
+        alive = 0
+        for m in motors.values():
+            try:
+                m.robstride_ping()
+                alive += 1
+            except Exception:
+                pass
+        if alive == len(motors):
+            return True
+        if alive:
+            logger.warning(f"从臂部分电机无应答: {alive}/{len(motors)} 在线")
+            return True  # 有回包说明总线通,单台问题交给录制内错误隔离
+        time.sleep(0.1)
+    return False
+
+
+def _try_zero(robot, when: str) -> bool:
+    """safe_zero 回零 + 失联告警。返回 False = 回零失败(疑似断电/CAN 失联)。"""
+    print(f"↺ 从臂回零中({when})...")
+    try:
+        robot.safe_zero(exit_on_complete=False)
+        return True
+    except Exception as e:
+        logger.error(f"{when}回零失败: {e}")
+        print("⚠️  从臂无响应 —— 疑似断电 / 急停拍下 / CAN 失联!请检查臂电源和 can0 状态。")
+        return False
+
+
+# 与插件 mapping.py 的 REBOT_ARM_MOTORS 同序
+_ARM_JOINTS = ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_yaw", "wrist_roll"]
+
+
+def _read_arm_action_deg(robot) -> list[float] | None:
+    """读从臂 6 关节**实际当前位**,换算成 action 空间(send_action 输入 = 电机原始度 / direction)。
+    用作对齐 ramp 的起点 —— safe_zero 把臂物理挪到零位后,teleop map 里记的保持位
+    还是上一条的输出,不喂实际位第一帧就跳变(踩过)。读不到返回 None(ramp 退回记忆起点)。"""
+    motors = getattr(robot, "motors", None)
+    bus = getattr(robot, "bus", None)
+    if not motors or bus is None:
+        return None
+    try:
+        for m in motors.values():
+            m.request_feedback()
+        bus.poll_feedback_once()
+    except Exception:
+        pass  # 反馈抖动就用缓存状态,ramp 起点只是参考
+    dirs = getattr(robot.config, "joint_directions", {})
+    out = []
+    for name in _ARM_JOINTS:
+        m = motors.get(name)
+        st = m.get_state() if m is not None else None
+        if st is None:
+            return None
+        out.append(math.degrees(st.pos) / (dirs.get(name, 1.0) or 1.0))
+    return out
+
+
+def _align_to_leader(robot, teleop, hz: float = 30.0, step_deg: float = 1.0,
+                     timeout_s: float = 20.0) -> bool:
+    """开录前对齐:回零后从臂在零位、主臂在手里,直接开录会弹射。先把 ramp 起点
+    喂成从臂**实际当前位**,再用 teleop 内置 startup ramp 的**慢速**(step_deg/帧,
+    默认 1°@30Hz ≈ 30°/s)把从臂滑到主臂当前位姿,ramp 收敛(输出已直通)= 到位。
+    超时未收敛返回 False(由调用方探测臂是否还活着)。"""
+    cur = _read_arm_action_deg(robot)
+    if hasattr(teleop, "rearm_ramp"):
+        try:
+            teleop.rearm_ramp(step_deg_per_step=step_deg, current_deg=cur)
+        except TypeError:
+            teleop.rearm_ramp()  # 旧版插件没有慢速/起点参数,退回默认限速
+    converged = getattr(teleop, "ramp_converged", None)
+    t0 = time.monotonic()
+    dt = 1.0 / hz
+    while time.monotonic() - t0 < timeout_s:
+        action = teleop.get_action()
+        robot.send_action(action)
+        if converged is None:
+            # 插件没有 ramp_converged(旧版):没有收敛信号可等,直接退(默认 ramp 会在录制里继续限速)
+            return True
+        if teleop.ramp_converged:
+            return True
+        time.sleep(dt)
+    return teleop.ramp_converged
 
 
 @parser.wrap()
@@ -167,6 +308,13 @@ def main(cfg: RecordConfig) -> None:
 
     target = cfg.dataset.num_episodes
     ep_time = cfg.dataset.episode_time_s
+    zero_before = os.environ.get("ZERO_BEFORE_EPISODE", "1") != "0"
+    zero_after = os.environ.get("ZERO_AFTER_EPISODE", "1") != "0"
+    align_on = os.environ.get("ALIGN_LEADER", "1") != "0"
+    align_step = float(os.environ.get("ALIGN_STEP_DEG", "1.0"))
+    align_timeout = float(os.environ.get("ALIGN_TIMEOUT_S", "20"))
+    start_cd = int(os.environ.get("START_COUNTDOWN", "3"))
+    end_cd = int(os.environ.get("END_COUNTDOWN", "5"))
     kept = dataset.num_episodes  # resume 时从已录条数接着数(target 为总目标)
     try:
         with VideoEncodingManager(dataset):
@@ -175,14 +323,51 @@ def main(cfg: RecordConfig) -> None:
                 if _ask(f"\n▶ 已保留 {kept}/{target}。回车开始录制(每条 {ep_time:g}s,录制中 →/Esc 可提前结束) | q 退出: ") == "q":
                     break
 
-                # 每条开录前重新武装启动 ramp:从当前保持位平滑滑到 leader 当前绝对位姿(见插件 rearm_ramp)
-                if hasattr(teleop, "rearm_ramp"):
+                # —— 从臂存活探测:电机断电/CAN 静默时 socketcan 写入不报错(没人 ACK),
+                # 会录出整段手臂没动的废数据且毫无告警(踩过)。每条开录前先探一次 ——
+                if not _arm_alive(robot):
+                    print("⚠️  从臂无响应 —— 疑似断电 / 急停拍下 / CAN 失联!检查臂电源、急停、can0。")
+                    if _ask("回车重新探测 / q 退出并保存已录: ") == "q":
+                        break
+                    continue
+
+                # —— 从臂回零位:每条从同一初始状态开录(ZERO_BEFORE_EPISODE=0 可关)。
+                # 失败(断电/CAN 失联等)不杀会话:告警回到闸门,与录制中出错同一容错策略 ——
+                if zero_before and not _try_zero(robot, "开录前"):
+                    if _ask("回车重试本条 / q 退出并保存已录: ") == "q":
+                        break
+                    continue
+
+                # —— 3 2 1 开录倒计时(START_COUNTDOWN=0 可关)——
+                if start_cd > 0:
+                    _countdown(start_cd, "▶ 开录倒计时")
+
+                # —— 对齐主臂(ALIGN_LEADER=0 可关):回零后从臂在零位、主臂在手里,
+                # 直接开录会弹射。用慢速 ramp(默认 1°/帧 ≈ 30°/s,ALIGN_STEP_DEG 可调)
+                # 把从臂滑到主臂当前位姿,收敛(ramp 直通)后才开录 —— 起步不跳变 ——
+                if align_on:
+                    print(f"🎯 对齐主臂中(限速 {align_step:g}°/帧,请扶稳主臂)...")
+                    if not _align_to_leader(robot, teleop, hz=cfg.dataset.fps,
+                                            step_deg=align_step, timeout_s=align_timeout):
+                        if not _arm_alive(robot):
+                            print("⚠️  对齐超时且从臂无响应 —— 疑似断电 / CAN 失联!")
+                            if _ask("回车重试本条 / q 退出并保存已录: ") == "q":
+                                break
+                            continue
+                        print("⚠️  对齐超时(主臂可能一直在动),本条起步段仍有限速 ramp 保护,必要时选 d 重录。")
+                elif hasattr(teleop, "rearm_ramp"):
+                    # 没开对齐:退回原行为,录制内的启动 ramp 从保持位限速滑向主臂
                     teleop.rearm_ramp()
 
                 events["exit_early"] = False
                 log_say(f"Recording episode {kept}", cfg.play_sounds)
+                # 结束倒计时(END_COUNTDOWN=0 可关):后台线程,record_loop 返回即停
+                cd_stop, cd_th = (
+                    _start_end_countdown(ep_time, end_cd) if 0 < end_cd < ep_time else (None, None)
+                )
                 # 单条错误隔离:硬件抖动(CAN 掉线 socketcan write failed / 相机卡)不该杀掉整轮 ——
                 # 捕获、丢弃本条、让用户重试或退出,而不是让异常炸掉 50 条会话。
+                rec_error = None
                 try:
                     record_loop(
                         robot=robot,
@@ -199,11 +384,21 @@ def main(cfg: RecordConfig) -> None:
                         display_mode=cfg.display_mode,
                     )
                 except Exception as e:
-                    logger.error(f"episode {kept} 录制中出错(可能 CAN 掉线/相机抖动): {e}")
+                    rec_error = e
+                finally:
+                    # record_loop 一返回(正常到点/提前结束/出错)就停掉结束倒计时线程
+                    if cd_stop is not None:
+                        cd_stop.set()
+                        cd_th.join(timeout=2)
+
+                if rec_error is not None:
+                    logger.error(f"episode {kept} 录制中出错(可能 CAN 掉线/相机抖动): {rec_error}")
                     try:
                         dataset.clear_episode_buffer()
                     except Exception:
                         pass
+                    if zero_after:
+                        _try_zero(robot, "异常后")  # 顺带探测:臂死了这里会告警
                     if _ask("本条已丢弃。回车重试本条 / q 退出并保存已录: ") == "q":
                         break
                     continue
@@ -213,6 +408,11 @@ def main(cfg: RecordConfig) -> None:
                 events["exit_early"] = False
                 events["stop_recording"] = False
                 events["rerecord_episode"] = False
+
+                # —— 本条结束自动回零(ZERO_AFTER_EPISODE=0 可关):录完立刻回零,
+                # 你斟酌保留/丢弃时臂已在归位。这也是断电探测器:臂死了会在此告警 ——
+                if zero_after:
+                    _try_zero(robot, "结束后")
 
                 # —— 闸门 2:保留 / 丢弃 ——
                 dec = _ask("■ 录完:回车/k=保留   d=丢弃重录   q=保存已录并退出: ")
@@ -237,6 +437,14 @@ def main(cfg: RecordConfig) -> None:
                     continue
                 kept += 1
                 log_say("Saved", cfg.play_sounds)
+    except KeyboardInterrupt:
+        # 任意阶段 Ctrl-C(探测/回零/倒计时/对齐/录制中):丢掉本条残缓冲,优雅收尾,
+        # 不甩一屏 traceback(踩过:录制中 Ctrl-C 从 record_loop 里炸出来)。
+        print("\n⚑ 键盘中断 —— 本条未完成已丢弃,正在收尾(已保留的不丢)...")
+        try:
+            dataset.clear_episode_buffer()
+        except Exception:
+            pass
     finally:
         # 收尾容错:任一步失败(如 CAN 掉线时 robot.disconnect 回零报错)都不该跳过后续清理
         # (相机/键盘/rerun 仍要关掉),逐步 try/except。

@@ -55,6 +55,7 @@ class LeaderToRebotMap:
         self._scale = float(scale)
         self._absolute = bool(absolute)
         self._ramp_step = float(startup_ramp_deg_per_step)
+        self._ramp_step_default = float(startup_ramp_deg_per_step)  # 临时慢速(对齐)收敛后恢复到这个值
         # 夹爪闭合端过冲:ratio=0 时目标压过闭合位,产生持续夹持力。
         close_dir = -1.0 if grip_close_deg <= grip_open_deg else 1.0
         self._grip_close_eff = float(grip_close_deg) + close_dir * float(grip_clamp_deg)
@@ -69,11 +70,31 @@ class LeaderToRebotMap:
         self._cmd_arm: list[float] | None = None  # 启动 ramp 用:当前臂输出目标
         self._ramped_in: bool = False             # 启动 ramp 是否已收敛(收敛后直通)
 
-    def rearm_ramp(self) -> None:
+    def rearm_ramp(
+        self,
+        step_deg_per_step: float | None = None,
+        current_deg: list[float] | None = None,
+    ) -> None:
         """重新武装启动限速 ramp:下一次 update 从**当前保持位**(``_cmd_arm``)平滑滑向目标,
         而不是直通。闸门式采集每条开录前 / 冻结恢复时调用 —— 等待期间主臂可能被挪动,
-        不重新限速则下一段起步会无限速弹射。不重置 ``_cmd_arm`` 和 ``_leader_home``。"""
+        不重新限速则下一段起步会无限速弹射。不重置 ``_leader_home``。
+
+        ``step_deg_per_step`` 给定时本次 ramp 用该慢速(开录前对齐主臂用,不跳变);
+        ramp 收敛后自动恢复默认值,不影响录制中的正常使用。
+
+        ``current_deg`` 给定时把 ramp 起点(``_cmd_arm``)改成这个**从臂实际当前位**
+        (6 臂关节,度,action 空间)。臂被外部移动过(如 safe_zero 回零)后必须传 ——
+        否则 ramp 从上一条输出的记忆位起步,第一帧直接跳变(踩过)。"""
+        if step_deg_per_step is not None:
+            self._ramp_step = float(step_deg_per_step)
+        if current_deg is not None:
+            self._cmd_arm = [float(v) for v in current_deg]
         self._ramped_in = False
+
+    @property
+    def ramp_converged(self) -> bool:
+        """启动 ramp 是否已收敛(输出已直通主臂目标)。对齐循环据此判断"到位"。"""
+        return self._ramped_in
 
     def update(self, leader: list[float], gripper_raw: float) -> list[float]:
         """一帧映射。``leader`` = 6 关节度(相对 leader 标定零位),``gripper_raw`` = 夹爪
@@ -102,6 +123,7 @@ class LeaderToRebotMap:
             arm = list(self._cmd_arm)
             if residual < 0.5:
                 self._ramped_in = True
+                self._ramp_step = self._ramp_step_default  # 临时慢速(对齐)用完即还,录制中恢复默认
         else:
             arm = target
             self._cmd_arm = list(target)

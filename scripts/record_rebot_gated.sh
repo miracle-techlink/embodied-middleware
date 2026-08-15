@@ -6,8 +6,14 @@
 #           bash scripts/record_rebot_gated.sh [额外 --key=val ...]
 #   环境变量: PY / LEADER_PORT / CAN / WRIST_CAM / FRONT_CAM / REPO_ID / TASK / EPISODES /
 #             EP_TIME(每条秒数,默认15) / PUSH / NO_DEPTH / WARMUP / FPS
-#             PREFLIGHT=0        跳过启动前设备自检(默认开:CAN/主臂/两相机缺一即 fail-fast)
+#             PREFLIGHT=0        跳过启动前设备自检(默认开:CAN/主臂/两相机/电机ACK缺一即 fail-fast;
+#                              CAN 不在 UP 会自动 sudo 拉起;电机无 ACK 会自动重拉 CAN 再探一次)
+#             ARM_PROBE=0        跳过电机 ACK 探测(默认开:断电/急停时总线静默,提前拦住)
 #             ORBBEC_RESET=0     跳过启动前 Orbbec USB 复位(默认开:固件一次性会话坑)
+#             ZERO_BEFORE_EPISODE=0  关掉每条开录前的从臂回零(默认开:回车→探测→回零→倒计时→对齐→录)
+#             ZERO_AFTER_EPISODE=0   关掉每条结束后的自动回零(默认开,兼作断电探测器)
+#             ALIGN_LEADER=0         关掉开录前慢速对齐主臂(默认开,ALIGN_STEP_DEG=1.0°/帧,ALIGN_TIMEOUT_S=20)
+#             START_COUNTDOWN=3      开录前倒计时秒数(0=关);END_COUNTDOWN=5 结束前倒计时(0=关)
 #             GRIP_KP / GRIP_CLAMP  夹爪力度(MIT 刚度,默认 9.0)/ 闭合过冲(度,默认 25)。
 #                                捏手/软物体数据建议 GRIP_KP=3.0 GRIP_CLAMP=10
 #             DEPTH_PRESET(深度无损 x265 preset,默认 ultrafast。真实 Orbbec 深度实测:
@@ -49,14 +55,30 @@ export PATH="$BIN_DIR:$PATH"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "${PREFLIGHT:-1}" = "1" ]; then
   FAIL=0
-  [ "$(cat /sys/class/net/${CAN}/operstate 2>/dev/null)" = "up" ] \
-    || { echo "[preflight] $CAN 不在 UP → sudo bash $SCRIPT_DIR/setup_rebot_can.sh"; FAIL=1; }
+  # CAN 不在 UP:自动拉起(sudo 可能问密码),拉起失败才 fail-fast
+  if [ "$(cat /sys/class/net/${CAN}/operstate 2>/dev/null)" != "up" ]; then
+    echo "[preflight] $CAN 不在 UP,自动拉起(sudo 可能问密码)..."
+    sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" \
+      || { echo "[preflight] $CAN 拉起失败 → 手动跑: sudo bash $SCRIPT_DIR/setup_rebot_can.sh"; FAIL=1; }
+  fi
   [ -e "$LEADER_PORT" ] \
     || { echo "[preflight] 主臂串口 $LEADER_PORT 不存在 → 检查 USB 连接 / udev 规则(99-starai-leader)"; FAIL=1; }
   [ -e "$FRONT_CAM" ] \
     || { echo "[preflight] 前视相机 $FRONT_CAM 不存在 → v4l2-ctl --list-devices 重认(用 by-id 路径,别用 /dev/videoN)"; FAIL=1; }
   lsusb 2>/dev/null | grep -q "2bc5:" \
     || { echo "[preflight] 枚举不到 Orbbec(2bc5) → 检查 USB(直插主板口,别上共享 hub)"; FAIL=1; }
+  # 电机 ACK 探测(ARM_PROBE=0 可跳):CAN UP ≠ 臂上电 —— 断电/急停时总线静默,
+  # socketcan 写入无人 ACK 也不报错,会蒙到 connect 才炸 control ack timeout(踩过)。
+  # 探不通先自动重拉 CAN 再探一次;仍静默 → 是臂那边的问题,报电源/急停。
+  if [ "$FAIL" = "0" ] && [ "${ARM_PROBE:-1}" = "1" ]; then
+    if ! "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN"; then
+      echo "[preflight] 电机无 ACK,自动重拉 CAN 再探一次..."
+      sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" || true
+      sleep 1
+      "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN" \
+        || { echo "[preflight] 重拉 CAN 后电机仍静默 → 检查:臂电源开关 / 急停按钮 / CAN 线。臂不上电录出来全是废数据,别硬跑。"; FAIL=1; }
+    fi
+  fi
   [ "$FAIL" = "1" ] && exit 1
 fi
 
