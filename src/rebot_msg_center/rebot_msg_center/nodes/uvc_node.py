@@ -47,32 +47,59 @@ class UvcNode(Node):
         import cv2
 
         self._cv2 = cv2
-        device = self.get_parameter("device").value
-        cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
-        if not cap.isOpened():
-            raise RuntimeError(f"打不开 {device}")
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, w)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, h)
-        cap.set(cv2.CAP_PROP_FPS, fps)
-        aw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        ah = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        if (aw, ah) != (w, h):
-            cap.release()
-            raise RuntimeError(f"{device} 分辨率设置失败: 要 {w}x{h},实际 {aw}x{ah}")
-        self.get_logger().info(f"UVC 相机 {device} 已开({aw}x{ah} @ 目标 {fps}fps,MJPG)。")
-        self._cap = cap
+        self._device = self.get_parameter("device").value
+        self._w, self._h, self._fps = w, h, fps
+        self._fail_streak = 0
+        self._open_camera()
 
         self._pub = self.create_publisher(CompressedImage, spec.topic_name, IMG_QOS)
         self.create_timer(1.0 / fps, self._publish_frame)
         self.get_logger().info(f"发布 {spec.topic_name} @ {fps}Hz。")
 
+    def _open_camera(self) -> None:
+        """打开并配置 V4L2 采集;取帧层冻住后的重开也走这里。"""
+        cv2 = self._cv2
+        cap = cv2.VideoCapture(self._device, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            raise RuntimeError(f"打不开 {self._device}")
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._w)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._h)
+        cap.set(cv2.CAP_PROP_FPS, self._fps)
+        aw = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        ah = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if (aw, ah) != (self._w, self._h):
+            cap.release()
+            raise RuntimeError(f"{self._device} 分辨率设置失败: 要 {self._w}x{self._h},实际 {aw}x{ah}")
+        self.get_logger().info(f"UVC 相机 {self._device} 已开({aw}x{ah} @ 目标 {self._fps}fps,MJPG)。")
+        self._cap = cap
+
     def _publish_frame(self):
         cv2 = self._cv2
         ok, frame = self._cap.read()  # (H,W,3) BGR
         if not ok:
-            self.get_logger().warning("取帧失败(cap.read False)", throttle_duration_sec=1.0)
+            # 偶发丢帧直接跳过;连续失败 ≈ 设备层冻死(实测 SN0002 会卡在 USB
+            # 传输层,cap.read 永久 False)——每 15 帧(≈0.5s)释放重开一次自愈,
+            # 不用重启节点,更不用动臂。
+            self._fail_streak += 1
+            if self._fail_streak % 15 == 0:
+                self.get_logger().error(
+                    f"连续 {self._fail_streak} 帧取帧失败,重开 {self._device} 自愈…"
+                )
+                try:
+                    self._cap.release()
+                except Exception:
+                    pass
+                try:
+                    self._open_camera()
+                    self._fail_streak = 0
+                    self.get_logger().info("重开成功,恢复发布。")
+                except Exception as e:
+                    self.get_logger().error(f"重开失败: {e}(0.5s 后再试)")
+            else:
+                self.get_logger().warning("取帧失败(cap.read False)", throttle_duration_sec=1.0)
             return
+        self._fail_streak = 0
         msg = CompressedImage()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.format = "jpeg"
