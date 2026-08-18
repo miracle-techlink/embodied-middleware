@@ -37,6 +37,9 @@ class UvcNode(Node):
         self.declare_parameter("fps", 30)
         self.declare_parameter("jpeg_quality", 90)
         self.declare_parameter("registry_json", "")
+        # 曝光锁定: 开机让 AE/AWB 自动收敛 N 帧后读出当前值并关自动锁死 —— 会话内
+        # 零漂移, 重启后重新收敛再锁(光照变了也自适应)。0=始终自动(旧行为)。
+        self.declare_parameter("lock_after_frames", 90)
 
         reg = TopicRegistry(self.get_parameter("registry_json").value or None)
         spec = reg.require("/rebot/front/color/compressed")
@@ -50,6 +53,8 @@ class UvcNode(Node):
         self._device = self.get_parameter("device").value
         self._w, self._h, self._fps = w, h, fps
         self._fail_streak = 0
+        self._lock_after = int(self.get_parameter("lock_after_frames").value)
+        self._frames = 0
         self._open_camera()
 
         self._pub = self.create_publisher(CompressedImage, spec.topic_name, IMG_QOS)
@@ -74,9 +79,32 @@ class UvcNode(Node):
         self.get_logger().info(f"UVC 相机 {self._device} 已开({aw}x{ah} @ 目标 {self._fps}fps,MJPG)。")
         self._cap = cap
 
+    def _lock_exposure(self) -> None:
+        """读出 AE/AWB 收敛值 → 关自动 → 写回锁死(策略的画面分布从此会话内恒定)。"""
+        cv2 = self._cv2
+        exp = self._cap.get(cv2.CAP_PROP_EXPOSURE)
+        wb = self._cap.get(cv2.CAP_PROP_WB_TEMPERATURE)
+        self._cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)   # V4L2: 1=manual, 3=auto
+        self._cap.set(cv2.CAP_PROP_AUTO_WB, 0)
+        if exp > 0:
+            self._cap.set(cv2.CAP_PROP_EXPOSURE, exp)
+        if wb > 0:
+            self._cap.set(cv2.CAP_PROP_WB_TEMPERATURE, wb)
+        self.get_logger().info(
+            f"曝光锁定: exposure={exp:.0f} wb={wb:.0f} "
+            f"(回读 exp={self._cap.get(cv2.CAP_PROP_EXPOSURE):.0f})"
+        )
+
     def _publish_frame(self):
         cv2 = self._cv2
         ok, frame = self._cap.read()  # (H,W,3) BGR
+        if ok:
+            self._frames += 1
+            if self._lock_after > 0 and self._frames == self._lock_after:
+                try:
+                    self._lock_exposure()
+                except Exception as e:
+                    self.get_logger().warning(f"曝光锁定失败(继续自动): {e}")
         if not ok:
             # 偶发丢帧直接跳过;连续失败 ≈ 设备层冻死(实测 SN0002 会卡在 USB
             # 传输层,cap.read 永久 False)——每 15 帧(≈0.5s)释放重开一次自愈,
@@ -93,6 +121,7 @@ class UvcNode(Node):
                 try:
                     self._open_camera()
                     self._fail_streak = 0
+                    self._frames = 0  # 重新收敛 AE 后再锁
                     self.get_logger().info("重开成功,恢复发布。")
                 except Exception as e:
                     self.get_logger().error(f"重开失败: {e}(0.5s 后再试)")
