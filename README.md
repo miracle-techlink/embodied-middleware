@@ -32,16 +32,27 @@ uvc_node    ──/rebot/front/color/compressed(30Hz)─────────
 
 ```bash
 # 终端 1:消息中心(Ctrl-C 全停,arm 会平滑回零再卸力矩)
-~/rebot_ros2_ws/start_msg_center.sh
+~/rebot_ros2_ws/start_msg_center.sh            # 采集/遥操作模式:五节点全起(默认)
+~/rebot_ros2_ws/start_msg_center.sh infer      # 推理模式:只起 arm+双相机
+                                                # 不起 leader/teleop_map —— follower 指令源只有策略
 
 # 终端 2:录制(观测走 topic,数据集格式与 rebot_follower 完全一致)
-source /opt/ros/jazzy/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$HOME/rebot_ros2_ws/src/rebot_msg_center
-conda activate data_collect
-lerobot-record \
-  --robot.type=ros2_rebot_follower --robot.id=follower1 \
-  --teleop.type=ros2_rebot_teleop --teleop.id=rebot_leader \
-  --dataset.repo_id=<repo> --dataset.fps=30 --dataset.rgb_encoder.vcodec=h264 ...
+REPO_ID=用户名/数据集名 TASK="任务描述" \
+  bash ~/rebot_ros2_ws/record_ros2.sh
+# 闸门式(每条固定时长→当场选留/丢→回车下一条;直连版 record_rebot_gated 的消息中心等价物,
+# 回零/对齐/存活探测换成 topic 语义,见 record_rebot_gated_ros2.py 头注释):
+REPO_ID=用户名/数据集名 TASK="任务描述" \
+  bash ~/rebot_ros2_ws/record_rebot_gated_ros2.sh
+# (脚本内补齐 source/PYTHONPATH/conda env + topic fail-fast;EPISODES/EP_TIME/NO_DISPLAY/RESUME 见脚本头)
+# 手打等价命令:
+#   source /opt/ros/jazzy/setup.bash
+#   export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$HOME/rebot_ros2_ws/src/rebot_msg_center
+#   conda activate data_collect
+#   lerobot-record \
+#     --robot.type=ros2_rebot_follower --robot.id=follower1 \
+#     --teleop.type=ros2_rebot_teleop --teleop.id=rebot_leader \
+# --dataset.repo_id=<repo> --dataset.fps=30 --dataset.rgb_encoder.vcodec=h264 ...
+# ⚠ flag 用下划线(--dataset.single_task),连字符版 draccus 不认(踩过)
 ```
 
 相机掉线/重插:重启对应节点即可,不用动录制进程——这就是消息中心的初衷。
