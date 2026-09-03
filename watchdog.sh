@@ -11,13 +11,13 @@
 #     必须先 usb_reset 再起节点(udev 0666 免 sudo)
 #   - 臂节点死(joint_state 停)最重: 优雅停整个中心再 infer 模式拉起(臂会回零)
 set -u
-WS="$HOME/rebot_ros2_ws"
+WS="$HOME/middleware"
 PY="$HOME/miniconda3/envs/data_collect/bin/python"
 FRONT_CAM="${FRONT_CAM:-/dev/video0}"
 ORBBEC_SN="${ORBBEC_SN:-CV2856D0006R}"
 
 set +u; source /opt/ros/jazzy/setup.bash; set -u
-export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$WS/src/rebot_msg_center"
+export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$WS/src/middleware"
 
 STATE=/rebot/follower/joint_state
 FRONT=/rebot/front/color/compressed
@@ -41,7 +41,7 @@ restart_front() {
   echo "[watchdog] 重启 UVC 前相机节点…"
   pkill -TERM -f "nodes.uvc_node" || true
   sleep 1
-  nohup "$PY" -m rebot_msg_center.nodes.uvc_node --ros-args -p device:="$FRONT_CAM" \
+  nohup "$PY" -m middleware.nodes.uvc_node --ros-args -p device:="$FRONT_CAM" \
     >> /tmp/uvc_node.log 2>&1 &
   sleep 4
 }
@@ -50,8 +50,8 @@ restart_wrist() {
   echo "[watchdog] 重启 Orbbec 腕相机节点(先 USB 复位)…"
   pkill -TERM -f "nodes.orbbec_node" || true
   sleep 2
-  "$PY" "$WS/src/rebot_msg_center/scripts/usb_reset.py" orbbec || true
-  nohup "$PY" -m rebot_msg_center.nodes.orbbec_node --ros-args -p serial:="$ORBBEC_SN" \
+  "$PY" "$WS/src/middleware/scripts/usb_reset.py" orbbec || true
+  nohup "$PY" -m middleware.nodes.orbbec_node --ros-args -p serial:="$ORBBEC_SN" \
     >> /tmp/orbbec_node.log 2>&1 &
   echo "[watchdog] Orbbec warmup ~18s…"
   sleep 18

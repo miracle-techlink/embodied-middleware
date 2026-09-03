@@ -21,7 +21,7 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage
 
-from rebot_msg_center.topic_registry import TopicRegistry
+from middleware.topic_registry import TopicRegistry
 
 IMG_QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT

@@ -2,7 +2,7 @@ from setuptools import setup
 from glob import glob
 import os
 
-package_name = "rebot_msg_center"
+package_name = "middleware"
 
 setup(
     name=package_name,
@@ -22,12 +22,12 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "rebot_arm_node = rebot_msg_center.nodes.rebot_arm_node:main",
-            "starai_leader_node = rebot_msg_center.nodes.starai_leader_node:main",
-            "teleop_map_node = rebot_msg_center.nodes.teleop_map_node:main",
-            "orbbec_node = rebot_msg_center.nodes.orbbec_node:main",
-            "uvc_node = rebot_msg_center.nodes.uvc_node:main",
-            "msg_center_bench = rebot_msg_center.nodes.msg_center_bench:main",
+            "rebot_arm_node = middleware.nodes.rebot_arm_node:main",
+            "starai_leader_node = middleware.nodes.starai_leader_node:main",
+            "teleop_map_node = middleware.nodes.teleop_map_node:main",
+            "orbbec_node = middleware.nodes.orbbec_node:main",
+            "uvc_node = middleware.nodes.uvc_node:main",
+            "msg_center_bench = middleware.nodes.msg_center_bench:main",
         ],
     },
 )

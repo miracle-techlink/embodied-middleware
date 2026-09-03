@@ -5,7 +5,7 @@
 新增设备 = 改 JSON + 写一个节点,消费侧代码零改动。
 
 用法:
-    reg = TopicRegistry()                       # 默认读包内 config/rebot_msg_center_single_arm.json
+    reg = TopicRegistry()                       # 默认读包内 config/rebot_single_arm.json
     reg = TopicRegistry("/path/to/other.json")
     spec = reg.require("/rebot/leader/joint_state")   # 不存在/未 enable 会抛错
     spec.topic_name, spec.type_name, spec.default_fps
@@ -17,7 +17,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-_DEFAULT_JSON = Path(__file__).resolve().parent.parent / "config" / "rebot_msg_center_single_arm.json"
+_DEFAULT_JSON = Path(__file__).resolve().parent.parent / "config" / "rebot_single_arm.json"
 
 
 @dataclass(frozen=True)
