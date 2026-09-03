@@ -20,8 +20,8 @@ PIPER_MOTORS = [f"joint_{i}" for i in range(1, 7)] + ["gripper"]
 class Ros2CamSpec:
     topic: str
     kind: str  # "color" | "depth"
-    width: int = 640
-    height: int = 480
+    width: int = 1280
+    height: int = 720
     fps: int = 30  # RobotConfig.__post_init__ 会查这个字段
 
 

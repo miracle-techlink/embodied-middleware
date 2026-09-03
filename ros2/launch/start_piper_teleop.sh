@@ -23,6 +23,10 @@ MODE="${1:-teleop}"
 CAMERA="${CAMERA:-0}"
 WRIST_SN="${WRIST_SN:-CP0CB530016X}"   # 腕部 Orbbec Gemini 335
 FRONT_SN="${FRONT_SN:-CP0CB53000DX}"   # 前视 Orbbec Gemini 335
+# 相机分辨率/画质(2026-09-03:640x480+jpeg90 太糊,升 720p+jpeg95;rebot 链路不受影响)
+CAM_W="${CAM_W:-1280}"
+CAM_H="${CAM_H:-720}"
+JPEG_Q="${JPEG_Q:-95}"
 
 source /opt/ros/jazzy/setup.bash
 export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$WS/src/middleware"
@@ -88,12 +92,14 @@ if [[ "$CAMERA" == "1" ]]; then
     fi
     "$PY" -m middleware.nodes.cameras.orbbec_node --ros-args \
         -p serial:="$WRIST_SN" -p use_depth:=true \
+        -p width:="$CAM_W" -p height:="$CAM_H" -p jpeg_quality:="$JPEG_Q" \
         -p color_topic:=/piper/wrist/color/compressed -p depth_topic:=/piper/wrist/depth/compressed \
         -p registry_json:="$WS/src/middleware/config/piper_msg_center.json" \
         > "$SESS/orbbec_wrist.log" 2>&1 &
     sleep 18  # wrist warmup 完(固件会话建立)再起 front
     "$PY" -m middleware.nodes.cameras.orbbec_node --ros-args \
         -p serial:="$FRONT_SN" -p use_depth:=false \
+        -p width:="$CAM_W" -p height:="$CAM_H" -p jpeg_quality:="$JPEG_Q" \
         -p color_topic:=/piper/front/color/compressed -p depth_topic:=/piper/front/depth/compressed \
         -p registry_json:="$WS/src/middleware/config/piper_msg_center.json" \
         > "$SESS/orbbec_front.log" 2>&1 &

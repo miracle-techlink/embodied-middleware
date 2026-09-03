@@ -72,6 +72,7 @@ if [[ "${ORBBEC_RESET:-1}" == "1" ]]; then
     python3 "$WS/src/middleware/scripts/usb_reset.py" orbbec || true
 fi
 "$PY" -m middleware.nodes.orbbec_node --ros-args -p serial:="$ORBBEC_SN" \
+    -p width:=640 -p height:=480 -p jpeg_quality:=90 \
     > "$L_ORBBEC" 2>&1 &
 
 sleep 18  # 等 Orbbec warmup(~15s)

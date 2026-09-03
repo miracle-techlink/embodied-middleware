@@ -9,9 +9,9 @@
 
 参数:
     serial   相机序列号(默认 CV275610002L)
-    width/height/fps  默认 640x480@30(与 record_rebot_gated.sh 一致)
+    width/height/fps  默认 1280x720@30(2026-09-03 起;rebot 链路保持 640x480,录制脚本显式传参)
     use_depth  默认 true;false 时只发彩色
-    jpeg_quality  默认 90
+    jpeg_quality  默认 95
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ class OrbbecNode(Node):
     def __init__(self):
         super().__init__("orbbec_node")
         self.declare_parameter("serial", "CV275610002L")
-        self.declare_parameter("width", 640)
-        self.declare_parameter("height", 480)
+        self.declare_parameter("width", 1280)
+        self.declare_parameter("height", 720)
         self.declare_parameter("fps", 30)
         self.declare_parameter("use_depth", True)
-        self.declare_parameter("jpeg_quality", 90)
+        self.declare_parameter("jpeg_quality", 95)
         self.declare_parameter("registry_json", "")
         # topic 前缀:默认 /rebot/wrist(向后兼容);piper 侧传 /piper/wrist 或 /piper/front
         self.declare_parameter("color_topic", "")

@@ -69,7 +69,7 @@ fi
 # 相机:piper follower 默认带三路相机 spec。CAMERA=1 录视频(需先 CAMERA=1 起 orbbec 节点),
 # 否则 video=false 只录关节(相机 spec 在但不写视频文件)。
 if [ "${CAMERA:-0}" = "1" ]; then
-    VIDEO_ARG=(--dataset.video=true --dataset.rgb_encoder.vcodec=h264)
+    VIDEO_ARG=(--dataset.video=true --dataset.rgb_encoder.vcodec=h264 --dataset.rgb_encoder.crf="${CRF:-23}")
 else
     VIDEO_ARG=(--dataset.video=false --dataset.rgb_encoder.vcodec=h264)
 fi

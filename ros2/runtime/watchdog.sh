@@ -55,6 +55,7 @@ restart_wrist() {
   sleep 2
   "$PY" "$WS/src/middleware/scripts/usb_reset.py" orbbec || true
   nohup "$PY" -m middleware.nodes.orbbec_node --ros-args -p serial:="$ORBBEC_SN" \
+    -p width:=640 -p height:=480 -p jpeg_quality:=90 \
     >> /tmp/orbbec_node.log 2>&1 &
   echo "[watchdog] Orbbec warmup ~18s…"
   sleep 18
