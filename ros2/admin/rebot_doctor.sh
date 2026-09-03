@@ -4,7 +4,10 @@
 #   rebot_doctor.sh            # 按 teleop 模式体检(五节点)
 #   rebot_doctor.sh infer      # 按 infer 模式体检(三节点:arm+uvc+orbbec)
 set -o pipefail   # 不开 -u:ros2 setup.bash 裸引用未定义变量会被炸(同 start_msg_center 坑)
-WS="$HOME/middleware"
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SELF/src/middleware" ]; then WS="$SELF"
+elif [ -d "$SELF/ros2/src/middleware" ]; then WS="$SELF/ros2"
+else WS="${MIDDLEWARE_HOME:-$HOME/middleware}"; fi
 MODE="${1:-teleop}"
 
 source /opt/ros/jazzy/setup.bash 2>/dev/null || true

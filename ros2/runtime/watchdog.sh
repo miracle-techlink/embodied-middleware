@@ -11,7 +11,10 @@
 #     必须先 usb_reset 再起节点(udev 0666 免 sudo)
 #   - 臂节点死(joint_state 停)最重: 优雅停整个中心再 infer 模式拉起(臂会回零)
 set -u
-WS="$HOME/middleware"
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SELF/src/middleware" ]; then WS="$SELF"
+elif [ -d "$SELF/ros2/src/middleware" ]; then WS="$SELF/ros2"
+else WS="${MIDDLEWARE_HOME:-$HOME/middleware}"; fi
 PY="$HOME/miniconda3/envs/data_collect/bin/python"
 FRONT_CAM="${FRONT_CAM:-/dev/video0}"
 ORBBEC_SN="${ORBBEC_SN:-CV2856D0006R}"

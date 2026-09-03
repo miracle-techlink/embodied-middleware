@@ -22,9 +22,9 @@
 ## 安装(一次)
 
 ```bash
-cd ~/Galaxea_rebot_starai_tele/lerobot_plugins
-LEROBOT_SRC=/home/tommyzihao/lingbot/lerobot bash install.sh          # 注册 rebot_follower + starai_to_rebot_leader
-LEROBOT_SRC=/home/tommyzihao/lingbot/lerobot bash install_orbbec.sh   # 注册 orbbec 相机(带深度必需)
+cd ~/platform/10-acquisition/code/rebot_datacollect/lerobot_plugins
+LEROBOT_SRC=~/lerobot-datacollect bash install_plugins.sh    # 注册 rebot_follower + starai_to_rebot_leader + ROS2 bridge
+LEROBOT_SRC=~/lerobot-datacollect bash install_orbbec.sh     # 注册 orbbec 相机(带深度必需)
 ```
 > lerobot 升级后插件会被覆盖,重跑上面两条即可。
 
@@ -55,7 +55,7 @@ LEROBOT_SRC=/home/tommyzihao/lingbot/lerobot bash install_orbbec.sh   # 注册 o
 ## 跑遥操作(先干这个,校方向)
 
 ```bash
-PY=~/miniconda3/envs/lerobot/bin/python bash ~/Galaxea_rebot_starai_tele/scripts/teleop_rebot.sh
+PY=~/miniconda3/envs/data_collect/bin/python bash ~/platform/10-acquisition/code/rebot_datacollect/tools/acquisition/teleop_rebot.sh
 ```
 - 起来会先**平滑 ramp 到 home** `[sp0, sl85, ef100, wf5, wy0, wr0]`(靠 `max_relative_target=8°/步`,无跳变)。
 - rerun 里能看到 `wrist`(彩色)、`wrist_depth`(深度)、`front`(USB)三路 + 关节曲线。
@@ -69,9 +69,9 @@ PY=~/miniconda3/envs/lerobot/bin/python bash ~/Galaxea_rebot_starai_tele/scripts
 ## 采数据集
 
 ```bash
-PY=~/miniconda3/envs/lerobot/bin/python \
+PY=~/miniconda3/envs/data_collect/bin/python \
 REPO_ID=你的用户名/rebot_pick TASK="pick up the cube" EPISODES=20 \
-bash ~/Galaxea_rebot_starai_tele/scripts/record_rebot.sh
+bash ~/platform/10-acquisition/code/rebot_datacollect/tools/acquisition/record_rebot.sh
 ```
 - 录完后**务必抽检深度**:数据集 meta 里应有 `observation.images.wrist_depth` 且被标为深度图。
   快速看一集:

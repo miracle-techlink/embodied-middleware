@@ -3,7 +3,7 @@
 # (触发 register_subclass,使 --robot.type / --teleop.type 可用)。
 #
 # 用法: LEROBOT_SRC=/path/to/lerobot bash install.sh
-#   LEROBOT_SRC 指向 lerobot 仓库根(其下有 src/lerobot/),默认 ~/lingbot/lerobot
+#   LEROBOT_SRC 指向 lerobot 仓库根(其下有 src/lerobot/),默认 ~/lerobot-datacollect
 #
 # 依赖(装在同一个 lerobot 环境里):
 #   - 官方 pip 插件 lerobot-robot-seeed-b601 (提供被继承的 seeed_b601_rs_follower)
@@ -12,7 +12,7 @@
 # 相机(录深度需要)另跑: bash install_orbbec.sh
 set -e
 HERE="$(cd "$(dirname "$0")/.." && pwd)"   # installers/ 的上一级 = lerobot_plugins 根
-LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lingbot/lerobot}"
+LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lerobot-datacollect}"
 LB="$LEROBOT_SRC/src/lerobot"
 [ -d "$LB" ] || { echo "!! 找不到 lerobot 源码: $LB (设 LEROBOT_SRC=lerobot仓库根)"; exit 1; }
 

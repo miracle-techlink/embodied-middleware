@@ -4,7 +4,7 @@
 # 用法: LEROBOT_SRC=/path/to/lerobot bash install_orbbec.sh
 set -e
 HERE="$(cd "$(dirname "$0")/.." && pwd)"   # installers/ 的上一级 = lerobot_plugins 根
-LEROBOT_SRC="${LEROBOT_SRC:-/home/tommyzihao/lingbot/lerobot}"
+LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lerobot-datacollect}"
 LB="$LEROBOT_SRC/src/lerobot"
 [ -d "$LB" ] || { echo "!! 找不到 lerobot 源码: $LB (设 LEROBOT_SRC)"; exit 1; }
 

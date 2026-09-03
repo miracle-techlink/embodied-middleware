@@ -4,7 +4,10 @@
 #   rebot_watch.sh -a         # 跟踪 logs/ 下全部日志(含历史录制留档)
 # Ctrl-C 退出(只读,不动任何进程)。
 set -o pipefail   # 不开 -u:ros2 setup.bash 裸引用未定义变量会被炸(同 start_msg_center 坑)
-WS="$HOME/middleware"
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SELF/src/middleware" ]; then WS="$SELF"
+elif [ -d "$SELF/ros2/src/middleware" ]; then WS="$SELF/ros2"
+else WS="${MIDDLEWARE_HOME:-$HOME/middleware}"; fi
 
 source /opt/ros/jazzy/setup.bash 2>/dev/null || true
 

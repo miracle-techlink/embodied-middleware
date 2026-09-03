@@ -10,6 +10,12 @@
 #   注意: 本脚本 flag 全用下划线(--dataset.single_task),连字符版 draccus 不认(踩过)。
 set -eo pipefail   # 不开 -u:ros2 setup.bash 裸引用未定义变量会被炸
 
+# WS: 脚本自身所在仓库根优先,回退 MIDDLEWARE_HOME/~/middleware
+_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$_SELF/src/middleware" ]; then WS="$_SELF"
+elif [ -d "$_SELF/ros2/src/middleware" ]; then WS="$_SELF/ros2"
+else WS="${MIDDLEWARE_HOME:-$HOME/middleware}"; fi
+
 REPO_ID="${REPO_ID:?请设 REPO_ID=你的用户名/数据集名}"
 TASK="${TASK:?请设 TASK=\"任务自然语言描述\"}"
 EPISODES="${EPISODES:-50}"
@@ -18,13 +24,13 @@ FPS="${FPS:-30}"
 
 # 全程留档:从这行起脚本所有输出(切换/轮询/录制)都进 logs/record_<时间>.log
 export PYTHONUNBUFFERED=1
-LOG_ROOT="$HOME/middleware/logs"; mkdir -p "$LOG_ROOT"
+LOG_ROOT="$WS/logs"; mkdir -p "$LOG_ROOT"
 LOGF="$LOG_ROOT/record_$(date +%Y%m%d_%H%M%S).log"
 exec > >(tee -a "$LOGF") 2>&1
 echo "== $(date '+%F %T') 启动 record_ros2,全程留档: $LOGF"
 
 source /opt/ros/jazzy/setup.bash
-export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$HOME/middleware/src/middleware"
+export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$WS/src/middleware"
 BIN_DIR="$HOME/miniconda3/envs/data_collect/bin"
 export PATH="$BIN_DIR:$PATH"
 
@@ -51,9 +57,9 @@ if [ "$_pub" != 1 ]; then
         exit 1
     fi
     echo "== joint_cmd 无发布者 → 自动切 teleop 模式(先优雅停当前布局,arm 会回零)..."
-    bash "$HOME/middleware/start_msg_center.sh" stop
+    bash "$WS/start_msg_center.sh" stop
     sleep 2
-    setsid nohup bash "$HOME/middleware/start_teleop.sh" \
+    setsid nohup bash "$WS/start_teleop.sh" \
         >"$LOG_ROOT/switch_$(date +%Y%m%d_%H%M%S).log" 2>&1 < /dev/null &
     echo "== teleop 消息中心已后台拉起(Orbbec warmup ~18s;停它:~/middleware/start_teleop.sh stop)"
     _ok=""
@@ -78,7 +84,7 @@ fi
 
 # 解冻 teleop:上一次闸门录制退出后 map 可能停在 enable=false(从臂不跟手),
 # 普通录制需要 cmd 流,不解除会在 teleop.connect 超时。已开则无害(连 true 不触发 rearm)。
-"$BIN_DIR/python" "$HOME/middleware/rebot_enable.py" true || true
+"$BIN_DIR/python" "$WS/rebot_enable.py" true || true
 
 # (全程留档已在脚本开头用 exec> >(tee) 挂好,stdout/stderr 一直进 LOGF;这里直接起 py)
 exec "$BIN_DIR/lerobot-record" \

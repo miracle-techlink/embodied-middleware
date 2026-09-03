@@ -10,7 +10,11 @@
 # 顺序:leader/arm/相机先起,teleop_map 最后起(cmd 一旦开始流,从臂即 ramp 跟随主臂)。
 set -eo pipefail   # -u 不开:ros2 的 setup.bash 裸引用未定义变量(AMENT_TRACE_SETUP_FILES)会被 -u 炸掉
 
-WS="$HOME/middleware"
+# WS: 脚本自身所在仓库根优先(支持多机多 checkout),回退 MIDDLEWARE_HOME/~/middleware
+SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SELF/src/middleware" ]; then WS="$SELF"
+elif [ -d "$SELF/ros2/src/middleware" ]; then WS="$SELF/ros2"
+else WS="${MIDDLEWARE_HOME:-$HOME/middleware}"; fi
 PY="$HOME/miniconda3/envs/data_collect/bin/python"
 LEADER_PORT="${LEADER_PORT:-/dev/ttyCH341USB0}"
 CAN_IFACE="${CAN_IFACE:-can0}"

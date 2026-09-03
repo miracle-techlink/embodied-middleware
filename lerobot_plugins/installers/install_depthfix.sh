@@ -14,7 +14,7 @@
 #
 # 用法: LEROBOT_SRC=/path/to/lerobot bash install_depthfix.sh
 set -e
-LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lingbot/lerobot}"
+LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lerobot-datacollect}"
 LB="$LEROBOT_SRC/src/lerobot"
 [ -d "$LB" ] || { echo "!! 找不到 lerobot 源码: $LB (设 LEROBOT_SRC=lerobot仓库根)"; exit 1; }
 
