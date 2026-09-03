@@ -1,0 +1,51 @@
+# PiPER X 采集机模板。硬件到位前 backend=mujoco;真机验收后覆盖为 sdk。
+rig:
+  name: piper-01
+  namespace: piper
+  ros:
+    distro: jazzy
+    domain_id: 1
+  env:
+    conda_env: data_collect
+    python: ~/miniconda3/envs/data_collect/bin/python
+    lerobot_src: ~/lerobot-datacollect
+
+modes:
+  observe: [follower]
+  infer:   [follower, front_cam]
+
+devices:
+  follower:
+    kind: arm
+    node: middleware.nodes.arms.piper_arm_node
+    backend: piper_mujoco
+    params:
+      backend: mujoco
+      can_name: can_piper
+      state_fps: 100
+      enable_cmd: false
+      command_timeout_ms: 200
+      registry_json: src/middleware/config/piper_msg_center.json
+    topics:
+      state: joint_state
+      cmd: joint_cmd
+
+  front_cam:
+    kind: camera
+    node: middleware.nodes.cameras.uvc_node
+    params:
+      device: /dev/video0
+      registry_json: src/middleware/config/piper_msg_center.json
+    topics:
+      color: front/color/compressed
+
+lerobot:
+  robot_type: ros2_piper_follower
+  teleop_type: null
+  cameras:
+    front: {kind: color}
+
+record:
+  fps: 30
+  episode_time_s: 15
+  episodes: 50

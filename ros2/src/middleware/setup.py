@@ -14,7 +14,7 @@ setup(
         ("share/" + package_name + "/config", glob("config/*.json")),
         ("share/" + package_name + "/launch", glob("launch/*.py")),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "PyYAML"],
     zip_safe=True,
     maintainer="will",
     maintainer_email="will@example.com",
@@ -29,6 +29,7 @@ setup(
             "uvc_node = middleware.nodes.uvc_node:main",
             "msg_center_bench = middleware.nodes.msg_center_bench:main",
             "piper_arm_node = middleware.nodes.piper_arm_node:main",
+            "rigctl-profile = middleware.core.profile_cli:main",
         ],
     },
 )

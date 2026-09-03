@@ -1,0 +1,75 @@
+# reBot 采集机当前真值配置(本机)
+# 旧脚本硬编码的参数全部收拢到这里;每台机器只改 local/overrides.yaml。
+rig:
+  name: rebot-thor-01
+  namespace: rebot
+  ros:
+    distro: jazzy
+    domain_id: 0
+  env:
+    conda_env: data_collect
+    python: ~/miniconda3/envs/data_collect/bin/python
+    lerobot_src: ~/lerobot-datacollect
+
+modes:
+  teleop: [leader, follower, front_cam, wrist_cam, teleop_map]
+  infer:  [follower, front_cam, wrist_cam]
+
+devices:
+  leader:
+    kind: leader
+    node: middleware.nodes.leaders.starai_leader_node
+    params:
+      port: /dev/ttyCH341USB0
+    topics:
+      state: leader/joint_state
+
+  follower:
+    kind: arm
+    node: middleware.nodes.arms.rebot_arm_node
+    backend: rebot
+    params:
+      can_port: can0
+      robot_id: follower1
+      state_fps: 200
+    topics:
+      state: follower/joint_state
+      cmd: follower/joint_cmd
+
+  front_cam:
+    kind: camera
+    node: middleware.nodes.cameras.uvc_node
+    params:
+      device: /dev/video0
+    topics:
+      color: front/color/compressed
+
+  wrist_cam:
+    kind: camera
+    node: middleware.nodes.cameras.orbbec_node
+    pre_start:
+      usb_reset: orbbec
+    warmup_s: 18
+    params:
+      serial: CV2856D0006R
+    topics:
+      color: wrist/color/compressed
+      depth: wrist/depth/compressed
+
+  teleop_map:
+    kind: control
+    node: middleware.nodes.control.teleop_map_node
+    params: {}
+
+lerobot:
+  robot_type: ros2_rebot_follower
+  teleop_type: ros2_rebot_teleop
+  cameras:
+    wrist: {kind: color}
+    wrist_depth: {kind: depth}
+    front: {kind: color}
+
+record:
+  fps: 30
+  episode_time_s: 15
+  episodes: 50

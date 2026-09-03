@@ -9,3 +9,6 @@ Log/
 # 数据集不进仓库(存在 ~/.cache/huggingface/lerobot/,或推到 Hub/ModelScope)
 data/
 datasets/
+
+# 每台采集机的本地 profile 覆盖(序列号、设备路径、密钥引用)
+profiles/local/overrides.yaml
