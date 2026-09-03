@@ -4,7 +4,7 @@
 直连采集工具(`tools/`)、文档(`docs/`)。每层内部再按"启动/运行/运维"
 或"插件源/安装器/补丁"细分。旧入口保留为透传 wrapper,canonical 实现只有一份。
 
-## ros2/(与 live 仓 ~/middleware 保持同步)
+## ros2/(= live 仓 ~/middleware)
 
 ```text
 ros2/
@@ -14,7 +14,9 @@ ros2/
 ├── src/middleware/
 │   ├── middleware/
 │   │   ├── core/             topic_registry(JSON 话题注册表读取)
-│   │   ├── backends/piper/   PiPER 后端抽象(SDK 真机 / MuJoCo 仿真),不含 ROS2 Node
+│   │   ├── backends/         硬件后端层,节点只剩 ROS 逻辑;两支臂同协议对称
+│   │   │   ├── rebot/        RebotFollower 薄壳(行为零重写,透传 lerobot 精调实现)
+│   │   │   └── piper/        PiPER 后端抽象(SDK 真机 / MuJoCo 仿真),不含 ROS2 Node
 │   │   ├── nodes/
 │   │   │   ├── arms/         rebot_arm_node、piper_arm_node(从臂驱动节点)
 │   │   │   ├── leaders/      starai_leader_node(主臂示教节点)
@@ -31,7 +33,9 @@ ros2/
 ### 判定规则
 
 - 涉及 ROS2 Node 的 → `nodes/` 下按设备角色(arms/leaders/cameras/control)放;
-- 硬件 SDK 交互但不依赖 rclpy 的 → `backends/` 按厂商放;
+- 硬件交互(不依赖 rclpy)的 → `backends/` 按厂商放;设备驱动来自 lerobot 插件的
+  也在这里做薄壳(rebot),使节点层对所有臂只见统一协议(connect/disconnect/
+  get_state/send_cmd);
 - 注册表/QoS/schema 等节点公共依赖 → `core/`;
 - 被 shell 脚本和节点共同调用的运维实现 → `maintenance/`(shell 入口在 `scripts/` 留 wrapper);
 - 一次性起停编排 → `launch/`;录制/守护长跑 → `runtime/`;只读体检/手工干预 → `admin/`。
@@ -65,7 +69,7 @@ tools/
 │   ├── usb/        check_usb、usbreset_orbbec、install_usb_noautosuspend、install_no_camera_probe
 │   └── power/      maxn_lock、estop_release
 ├── diagnostics/    probe_arm、profile_loop(.sh/.py)
-└── (旧 scripts/ 根入口 wrapper 保留,见 scripts/README.md)
+└── (旧 scripts/ 根入口 wrapper 保留)
 ```
 
 判定:采集动作 → `acquisition/`;装环境 → `environment/`;动硬件配置 →
