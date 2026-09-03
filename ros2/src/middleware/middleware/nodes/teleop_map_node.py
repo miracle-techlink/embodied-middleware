@@ -14,7 +14,11 @@
     订阅 /rebot/leader/joint_state   JointState(joint_1..6 度 + gripper [0,1])
     发布 /rebot/follower/joint_cmd   JointState(7 关节绝对目标角,度)
     订阅 /rebot/teleop/enable        Bool  False=冻结(停发,从臂保持最后目标)
-    订阅 /rebot/teleop/rearm         Empty 重新武装启动 ramp(闸门录制每条开录前发)
+    订阅 /rebot/teleop/rearm         Empty 重新武装启动 ramp(闸门录制每条开录前发;
+                                      同时退出 go_home 模式)
+    订阅 /rebot/teleop/go_home       Empty 自主回零:leader 视作全零 → 目标=home,
+                                      复用启动 ramp 限速滑过去(闸门录制每条录完发,
+                                      等价直连版 safe_zero);enable 恢复/rearm 退出该模式
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ from lerobot.teleoperators.starai_to_rebot_leader.config_starai_to_rebot_leader 
     StaraiToRebotLeaderConfig,
 )
 from lerobot.teleoperators.starai_to_rebot_leader.mapping import REBOT_ARM_MOTORS, LeaderToRebotMap
-from rebot_msg_center.topic_registry import TopicRegistry
+from middleware.topic_registry import TopicRegistry
 
 QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT
@@ -58,6 +62,8 @@ class TeleopMapNode(Node):
         self.declare_parameter("grip_ratio_min", _CFG_DEFAULTS.grip_ratio_min)
         self.declare_parameter("grip_ratio_max", _CFG_DEFAULTS.grip_ratio_max)
         self.declare_parameter("enabled", True)
+        # go_home 回零限速(度/步 @100Hz;默认 0.5 ≈ 50°/s,比默认 ramp 慢一个量级,回零不甩)
+        self.declare_parameter("go_home_ramp_deg_per_step", 0.5)
 
         reg = TopicRegistry(self.get_parameter("registry_json").value or None)
         leader_spec = reg.require("/rebot/leader/joint_state")
@@ -80,10 +86,12 @@ class TeleopMapNode(Node):
 
         self._enabled = bool(p("enabled"))
         self._leader: dict[str, float] | None = None  # 最新 leader 读数(name → 值)
+        self._go_home = False  # go_home 模式:目标=home(leader 视作零),rearm/enable 恢复时退出
 
         self.create_subscription(JointState, leader_spec.topic_name, self._on_leader, QOS)
         self.create_subscription(Bool, "/rebot/teleop/enable", self._on_enable, LATCH_QOS)
         self.create_subscription(Empty, "/rebot/teleop/rearm", self._on_rearm, LATCH_QOS)
+        self.create_subscription(Empty, "/rebot/teleop/go_home", self._on_go_home, LATCH_QOS)
         self._cmd_pub = self.create_publisher(JointState, cmd_spec.topic_name, QOS)
         self.create_timer(1.0 / fps, self._publish_cmd)
         self.get_logger().info(
@@ -98,24 +106,40 @@ class TeleopMapNode(Node):
     def _on_enable(self, msg: Bool):
         if msg.data and not self._enabled:
             self._map.rearm_ramp()  # 冻结期间主臂可能被挪动,恢复时重新限速
+            self._go_home = False
         self._enabled = bool(msg.data)
         self.get_logger().info(f"teleop {'恢复(重新 ramp)' if self._enabled else '冻结'}。")
 
     def _on_rearm(self, _msg: Empty):
+        self._go_home = False
         self._map.rearm_ramp()
-        self.get_logger().info("启动 ramp 已重新武装。")
+        self.get_logger().info("启动 ramp 已重新武装(退出 go_home 模式)。")
+
+    def _on_go_home(self, _msg: Empty):
+        # 自主回零:leader 视作全零 → 目标=home;用专用慢速 ramp 从当前输出滑过去
+        # (默认 ramp 6°/步@100Hz≈600°/s,回零太快会甩)。不看 _enabled —— 录制会话
+        # 起手是冻结态,录完照样要能回零。收敛后 ramp 自动恢复默认并直通保持 home。
+        self._go_home = True
+        self._map.rearm_ramp(
+            step_deg_per_step=float(self.get_parameter("go_home_ramp_deg_per_step").value)
+        )
+        self.get_logger().info("go_home:限速滑回 home(rearm/enable 恢复退出)。")
 
     # ---------------- 映射 + 发布 ----------------
     def _publish_cmd(self):
-        if not self._enabled or self._leader is None:
-            return  # 冻结/主臂未上线:停发,从臂保持最后 MIT 目标
-        la = self._leader
-        try:
-            leader = [la[f"joint_{i + 1}"] for i in range(6)]
-        except KeyError:
-            return  # 主臂消息缺关节,等下一帧
+        if self._go_home:
+            leader, grip = [0.0] * 6, 0.0  # leader=零 → 目标=home;夹爪张开
+        else:
+            if not self._enabled or self._leader is None:
+                return  # 冻结/主臂未上线:停发,从臂保持最后 MIT 目标
+            la = self._leader
+            try:
+                leader = [la[f"joint_{i + 1}"] for i in range(6)]
+            except KeyError:
+                return  # 主臂消息缺关节,等下一帧
+            grip = float(la.get("gripper", 0.0))
 
-        out7 = self._map.update(leader, float(la.get("gripper", 0.0)))
+        out7 = self._map.update(leader, grip)
 
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()

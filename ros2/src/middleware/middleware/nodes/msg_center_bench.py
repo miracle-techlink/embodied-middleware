@@ -5,9 +5,9 @@
 订阅者统计:单跳延迟(订阅回调时刻 - stamp)、回调周期抖动、丢帧数。
 
 跑法(两个终端,或 --both 单进程内):
-    ros2 run rebot_msg_center msg_center_bench --ros-args -p role:=pub
-    ros2 run rebot_msg_center msg_center_bench --ros-args -p role:=sub
-    ros2 run rebot_msg_center msg_center_bench --ros-args -p role:=both -p hz:=100.0 -p seconds:=10
+    ros2 run middleware msg_center_bench --ros-args -p role:=pub
+    ros2 run middleware msg_center_bench --ros-args -p role:=sub
+    ros2 run middleware msg_center_bench --ros-args -p role:=both -p hz:=100.0 -p seconds:=10
 
 判定标准(对照现有直连 30Hz/13ms 循环):
     单跳延迟 p99 < 2ms、回调周期 p99 抖动 < 5ms → 控制走 topic 放行。

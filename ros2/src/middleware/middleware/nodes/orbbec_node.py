@@ -22,7 +22,7 @@ from rclpy.node import Node
 from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import CompressedImage
 
-from rebot_msg_center.topic_registry import TopicRegistry
+from middleware.topic_registry import TopicRegistry
 
 IMG_QOS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, depth=1, reliability=ReliabilityPolicy.BEST_EFFORT
@@ -39,6 +39,9 @@ class OrbbecNode(Node):
         self.declare_parameter("use_depth", True)
         self.declare_parameter("jpeg_quality", 90)
         self.declare_parameter("registry_json", "")
+        # 曝光锁定: warmup 后让 AE 再收敛 N 秒, 读出当前 exposure/gain 关自动锁死
+        # (重启会话间画面分布恒定 —— 相机重启不再是策略观测漂移源)。0=始终自动。
+        self.declare_parameter("lock_after_s", 8.0)
 
         reg = TopicRegistry(self.get_parameter("registry_json").value or None)
         color_spec = reg.require("/rebot/wrist/color/compressed")
@@ -68,11 +71,34 @@ class OrbbecNode(Node):
             if self._use_depth else None
         )
         self.create_timer(1.0 / fps, self._publish_frames)
+        lock_after = float(self.get_parameter("lock_after_s").value)
+        if lock_after > 0:
+            self._lock_timer = self.create_timer(lock_after, self._lock_exposure)
         self.get_logger().info(
             f"发布 {color_spec.topic_name}"
             + (f" + {depth_spec.topic_name}" if self._use_depth else "")
             + f" @ {fps}Hz。"
         )
+
+    def _lock_exposure(self) -> None:
+        """AE 收敛后读出 exposure/gain → 关自动 → 写回锁死(一次性定时器)。"""
+        self._lock_timer.cancel()
+        try:
+            import pyorbbecsdk as ob
+
+            dev = self._cam.pipeline.get_device()
+            prop = ob.OBPropertyID
+            exp = dev.get_int_property(prop.OB_PROP_COLOR_EXPOSURE_INT)
+            gain = dev.get_int_property(prop.OB_PROP_COLOR_GAIN_INT)
+            dev.set_bool_property(prop.OB_PROP_COLOR_AUTO_EXPOSURE_BOOL, False)
+            dev.set_int_property(prop.OB_PROP_COLOR_EXPOSURE_INT, exp)
+            dev.set_int_property(prop.OB_PROP_COLOR_GAIN_INT, gain)
+            self.get_logger().info(
+                f"曝光锁定: exposure={exp} gain={gain} "
+                f"(回读 exp={dev.get_int_property(prop.OB_PROP_COLOR_EXPOSURE_INT)})"
+            )
+        except Exception as e:
+            self.get_logger().warning(f"曝光锁定失败(继续自动): {e}")
 
     def _publish_frames(self):
         import cv2
