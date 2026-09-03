@@ -1,0 +1,22 @@
+{
+  "ros_topics": [
+    {
+      "enable": true,
+      "topic_name": "/piper/joint_state",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 100,
+      "producer": "piper_arm_node",
+      "description": "PiPER X 6 关节反馈(度)+ 夹爪行程(毫米,0=闭合~88 全开);backend=mujoco 时为仿真值"
+    },
+    {
+      "enable": true,
+      "topic_name": "/piper/joint_cmd",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 100,
+      "producer": "",
+      "description": "PiPER X 6 关节绝对目标角(度)+ 夹爪目标行程(毫米);piper_arm_node 仅在 enable_cmd:=true 时消费"
+    }
+  ]
+}
