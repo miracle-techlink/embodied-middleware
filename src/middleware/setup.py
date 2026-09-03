@@ -28,6 +28,7 @@ setup(
             "orbbec_node = middleware.nodes.orbbec_node:main",
             "uvc_node = middleware.nodes.uvc_node:main",
             "msg_center_bench = middleware.nodes.msg_center_bench:main",
+            "piper_arm_node = middleware.nodes.piper_arm_node:main",
         ],
     },
 )
