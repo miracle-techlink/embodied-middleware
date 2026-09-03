@@ -16,6 +16,9 @@ AgilexCobotMagic 的 msg_center JSON。控制回路(主臂→映射→从臂)由
 > `./start_rig.sh <mode> --rig <rig>`(安全 SIGTERM 守护)、
 > `./rig_doctor.sh <mode> --rig <rig>`、`./rig_watchdog.sh check|heal|watch`。
 > 旧 `start_msg_center.sh` 与 reBot 固定工具继续兼容。
+>
+> **部署前自检**:`python3 ros2/launch/fleet_validate.py` 离线校验全部 rig
+> profile(结构/mode 引用/健康流/节点可导入),不接触硬件;新机器 ssh 上去先跑它。
 
 ## 拓扑
 
