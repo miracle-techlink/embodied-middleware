@@ -4,12 +4,6 @@
 AgilexCobotMagic 的 msg_center JSON。控制回路(主臂→映射→从臂)由节点自持 100Hz,
 与录制循环彻底解耦;录制只是被动订阅。
 
-> **目录分类(2026-09-03 起)**:脚本按 `launch/`(启动)/`runtime/`(录制与守护)/
-> `admin/`(体检运维)分层;Python 包按 `core/`、`backends/`、`nodes/{arms,leaders,
-> cameras,control,benchmarks}`、`maintenance/` 分层。根目录的 start_*/record_*/
-> rebot_* 全部是兼容 wrapper,旧用法不破。详见 ../docs/architecture/DIRECTORY_LAYOUT.md
-> 与 ../docs/architecture/COMPATIBILITY.md。
-
 ## 拓扑
 
 ```
@@ -38,8 +32,8 @@ uvc_node    ──/rebot/front/color/compressed(30Hz)─────────
 
 ```bash
 # 终端 1:消息中心(Ctrl-C 全停,arm 会平滑回零再卸力矩)
-~/middleware/start_teleop.sh               # 采集/遥操作模式:五节点全起
-~/middleware/start_infer.sh                # 推理模式:只起 arm+双相机
+~/middleware/start_teleop.sh               # 采集/遥操作模式:五节点全起(兼容 wrapper)
+~/middleware/start_infer.sh                # 推理模式:只起 arm+双相机(兼容 wrapper)
                                                # 不起 leader/teleop_map —— follower 指令源只有策略
 # (两者都支持 stop 子参数;引擎仍是 start_msg_center.sh teleop|infer|stop,wrapper 不复制逻辑)
 
