@@ -27,3 +27,23 @@
 - source: cameras/orbbec
   dest: cameras/orbbec
   register: []   # 注册由 install_orbbec.sh 的核心补丁完成(工厂分发 + import_utils)
+
+# ---- ROS2 消息中心桥接(主链;观测走 topic,不碰硬件) ----
+
+- source: robots/ros2_rebot_follower
+  dest: robots/ros2_rebot_follower
+  register:
+    file: robots/__init__.py
+    line: "from . import ros2_rebot_follower  # noqa: F401"
+
+- source: robots/ros2_piper_follower
+  dest: robots/ros2_piper_follower
+  register:
+    file: robots/__init__.py
+    line: "from . import ros2_piper_follower  # noqa: F401"
+
+- source: teleoperators/ros2_rebot_teleop
+  dest: teleoperators/ros2_rebot_teleop
+  register:
+    file: teleoperators/__init__.py
+    line: "from . import ros2_rebot_teleop  # noqa: F401"

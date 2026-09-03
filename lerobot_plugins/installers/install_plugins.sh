@@ -16,10 +16,13 @@ LEROBOT_SRC="${LEROBOT_SRC:-$HOME/lingbot/lerobot}"
 LB="$LEROBOT_SRC/src/lerobot"
 [ -d "$LB" ] || { echo "!! 找不到 lerobot 源码: $LB (设 LEROBOT_SRC=lerobot仓库根)"; exit 1; }
 
-echo "[plugins] 复制 reBot 采集插件 -> $LB"
+echo "[plugins] 复制消息中心 bridge + reBot 硬件适配插件 -> $LB"
 cp -r "$HERE/plugins/robots/rebot_follower"                      "$LB/robots/"
+cp -r "$HERE/plugins/robots/ros2_rebot_follower"                 "$LB/robots/"
+cp -r "$HERE/plugins/robots/ros2_piper_follower"                 "$LB/robots/"
 cp -r "$HERE/plugins/teleoperators/starai_violin_leader"         "$LB/teleoperators/"
 cp -r "$HERE/plugins/teleoperators/starai_to_rebot_leader"       "$LB/teleoperators/"
+cp -r "$HERE/plugins/teleoperators/ros2_rebot_teleop"            "$LB/teleoperators/"
 
 add_import() {  # 幂等追加注册导入
   local f="$1" line="$2"
@@ -31,8 +34,12 @@ add_import "$LB/robots/__init__.py"        "from . import rebot_follower  # noqa
 add_import "$LB/teleoperators/__init__.py" "from . import starai_violin_leader  # noqa: F401"
 # starai_to_rebot_leader: 把 StarAI 主臂映射到 reBot 关节空间(绝对映射 + 启动限速 ramp + 夹爪)
 add_import "$LB/teleoperators/__init__.py" "from . import starai_to_rebot_leader  # noqa: F401"
+# ros2_rebot_follower / ros2_piper_follower / ros2_rebot_teleop: 消息中心 bridge(主链,观测走 topic)
+add_import "$LB/robots/__init__.py"        "from . import ros2_rebot_follower  # noqa: F401"
+add_import "$LB/robots/__init__.py"        "from . import ros2_piper_follower  # noqa: F401"
+add_import "$LB/teleoperators/__init__.py" "from . import ros2_rebot_teleop  # noqa: F401"
 
 echo "[plugins] 完成。已注册:"
-echo "         robot         : rebot_follower"
-echo "         teleoperators : starai_violin_leader / starai_to_rebot_leader"
+echo "         robots        : rebot_follower / ros2_rebot_follower / ros2_piper_follower"
+echo "         teleoperators : starai_violin_leader / starai_to_rebot_leader / ros2_rebot_teleop"
 echo "[plugins] 录深度数据集还需相机插件:  bash install_orbbec.sh"
