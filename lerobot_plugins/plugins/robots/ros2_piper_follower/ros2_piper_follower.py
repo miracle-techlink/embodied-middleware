@@ -14,6 +14,7 @@ import logging
 import time
 from functools import cached_property
 
+import numpy as np
 from lerobot.robots.robot import Robot
 
 from ..ros2_rebot_follower.ros2_bus import Ros2Bus
@@ -31,15 +32,21 @@ class Ros2PiperFollower(Robot):
         self.config = config
         self._bus: Ros2Bus | None = None
         self._connected = False
+        self._last_img: dict = {}
 
     # ---------------- features ----------------
     @property
     def cameras(self) -> dict:
-        return {}  # PiPER 侧相机走独立相机节点/ros2_rebot_follower 的相机 spec
+        """record 脚本取 len(robot.cameras) 算图像写线程数;相机实体在相机节点侧。"""
+        return self.config.cameras
 
     @cached_property
-    def observation_features(self) -> dict[str, type]:
-        return {f"{m}.pos": float for m in PIPER_MOTORS}
+    def observation_features(self) -> dict:
+        ft: dict = {f"{m}.pos": float for m in PIPER_MOTORS}
+        for cam_name, spec in self.config.cameras.items():
+            ch = 1 if spec.kind == "depth" else 3
+            ft[cam_name] = (spec.height, spec.width, ch)
+        return ft
 
     @cached_property
     def action_features(self) -> dict[str, type]:
@@ -57,6 +64,8 @@ class Ros2PiperFollower(Robot):
     def connect(self, calibrate: bool = True) -> None:
         self._bus = Ros2Bus.instance()
         self._bus.sub_joint_state(self.config.state_topic)
+        for spec in self.config.cameras.values():
+            self._bus.sub_image(spec.topic, spec.kind)
         deadline = time.monotonic() + 5.0
         while self._bus.latest_joint_state(self.config.state_topic) is None:
             if time.monotonic() > deadline:
@@ -65,7 +74,7 @@ class Ros2PiperFollower(Robot):
                 )
             time.sleep(0.05)
         self._connected = True
-        logger.info(f"{self}: 已订阅 {self.config.state_topic}。")
+        logger.info(f"{self}: 已订阅 {self.config.state_topic} + {len(self.config.cameras)} 路图像。")
 
     def calibrate(self) -> None:
         pass
@@ -87,7 +96,23 @@ class Ros2PiperFollower(Robot):
             data = {} if js is None else js[0]
         else:
             data = js[0]
-        return {f"{m}.pos": data.get(m, (0.0, 0.0, 0.0))[0] for m in PIPER_MOTORS}
+        obs: dict = {f"{m}.pos": data.get(m, (0.0, 0.0, 0.0))[0] for m in PIPER_MOTORS}
+
+        for cam_name, spec in self.config.cameras.items():
+            got = self._bus.latest_image(spec.topic)
+            if got is not None and time.monotonic() - got[1] <= stale_s:
+                obs[cam_name] = got[0]
+                self._last_img[cam_name] = got[0]
+            else:
+                fallback = self._last_img.get(cam_name)
+                if got is None and fallback is None:
+                    ch = 1 if spec.kind == "depth" else 3
+                    dt = np.uint16 if spec.kind == "depth" else np.uint8
+                    fallback = np.zeros((spec.height, spec.width, ch), dtype=dt)
+                else:
+                    logger.warning(f"{cam_name} 帧龄超限,回退上一帧。")
+                obs[cam_name] = fallback
+        return obs
 
     # ---------------- action ----------------
     def send_action(self, action: dict) -> dict:

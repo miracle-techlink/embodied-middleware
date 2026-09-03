@@ -4,9 +4,16 @@
 # 前提:已跑 start_piper_teleop.sh 且 /piper/leader/joint_state 有数据。
 # 用法:  REPO_ID=用户名/数据集名 TASK="任务描述" bash record_piper.sh
 #   可选: EPISODES(默认50) EP_TIME(每条秒数,默认15) FPS(默认30)
+#         RESET_TIME(条间复位窗口秒数,默认10,rebot gated 的"回零/摆位"等价物)
 #         NO_DISPLAY=1 关 rerun / PUSH=true 推 hub / RESUME=1 续录
 #         CAMERA=1 留位:Piper 侧相机接入后打开 video(默认无相机,纯关节数据)
 #   注意: flag 全用下划线(--dataset.single_task),连字符版 draccus 不认。
+#
+# 闸门式交互(rebot record_rebot_gated 的 Piper 等价物,lerobot-record 内置键盘):
+#   录制中:  →(右箭头) 提前结束本条并保留   ←(左箭头) 丢弃本条重录   Esc 退出
+#   每条结束自动进 RESET_TIME 秒复位窗口(你把主臂摆回起始位),再自动开下一条。
+#   与 rebot gated 的差异:Piper 是固件直通,无 teleop_map,故没有"冻结/回零/ramp"
+#   —— 从臂始终跟主臂,复位窗口里你手动把主臂(连从臂)摆回起始位即可。
 #
 # 与 rebot record_ros2.sh 的差异:
 #   - action 源是主臂位姿 topic(主臂固件直通,无 map 节点),不需要等 joint_cmd 发布者
@@ -21,6 +28,7 @@ TASK="${TASK:?请设 TASK=\"任务自然语言描述\"}"
 EPISODES="${EPISODES:-50}"
 EP_TIME="${EP_TIME:-15}"
 FPS="${FPS:-30}"
+RESET_TIME="${RESET_TIME:-10}"
 
 # 全程留档
 export PYTHONUNBUFFERED=1
@@ -47,7 +55,8 @@ if [ "$_pub" != 1 ]; then
     echo "   bash $WS/launch/start_piper_teleop.sh"
     exit 1
 fi
-echo "== 链路就绪(leader 节点在跑)。录制开始后掰动主臂即可,从臂固件跟随。"
+echo "== 链路就绪(leader 节点在跑)。"
+echo "== 闸门式交互: 录制中 →=提前结束本条保留 / ←=丢弃重录 / Esc=退出;每条结束有 ${RESET_TIME}s 复位窗口(手动把主臂摆回起始位)。"
 
 OPT_ARG=()
 if [ "${NO_DISPLAY:-0}" = "1" ]; then OPT_ARG+=(--display_data=false); else OPT_ARG+=(--display_data=true); fi
@@ -57,9 +66,13 @@ if [ "${RESUME:-0}" = "1" ]; then
     OPT_ARG+=(--resume=true --dataset.root="$LROOT")
 fi
 
-# 相机:默认无(Piper 侧相机未接入)。CAMERA=1 时录视频。
-VIDEO_ARG=(--dataset.video=false --dataset.rgb_encoder.vcodec=h264)
-if [ "${CAMERA:-0}" = "1" ]; then VIDEO_ARG=(--dataset.video=true --dataset.rgb_encoder.vcodec=h264); fi
+# 相机:piper follower 默认带三路相机 spec。CAMERA=1 录视频(需先 CAMERA=1 起 orbbec 节点),
+# 否则 video=false 只录关节(相机 spec 在但不写视频文件)。
+if [ "${CAMERA:-0}" = "1" ]; then
+    VIDEO_ARG=(--dataset.video=true --dataset.rgb_encoder.vcodec=h264)
+else
+    VIDEO_ARG=(--dataset.video=false --dataset.rgb_encoder.vcodec=h264)
+fi
 
 exec "$BIN_DIR/lerobot-record" \
     --robot.type=ros2_piper_follower --robot.id=piper_follower1 \
@@ -71,6 +84,7 @@ exec "$BIN_DIR/lerobot-record" \
     --dataset.fps="${FPS}" \
     --dataset.num_episodes="${EPISODES}" \
     --dataset.episode_time_s="${EP_TIME}" \
+    --dataset.reset_time_s="${RESET_TIME}" \
     --dataset.push_to_hub="${PUSH:-false}" \
     "${VIDEO_ARG[@]}" \
     "${OPT_ARG[@]}" "$@"

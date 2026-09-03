@@ -17,6 +17,42 @@
       "default_fps": 100,
       "producer": "",
       "description": "PiPER X 6 关节绝对目标角(度)+ 夹爪目标行程(毫米);piper_arm_node 仅在 enable_cmd:=true 时消费"
+    },
+    {
+      "enable": true,
+      "topic_name": "/piper/leader/joint_state",
+      "type_name": "sensor_msgs/msg/JointState",
+      "schema_text": "std_msgs/Header header\nstring[] name\nfloat64[] position\nfloat64[] velocity\nfloat64[] effort\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 20,
+      "producer": "piper_leader_node",
+      "description": "主臂位姿(监听固件联动帧还原;事件驱动+20Hz保持;度+毫米),作采集 action"
+    },
+    {
+      "enable": true,
+      "topic_name": "/piper/wrist/color/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "orbbec_node",
+      "description": "腕部 Orbbec Gemini 335 彩色,jpeg 压缩"
+    },
+    {
+      "enable": true,
+      "topic_name": "/piper/wrist/depth/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "orbbec_node",
+      "description": "腕部 Orbbec 对齐深度,uint16 毫米,format='16UC1; png compressed'"
+    },
+    {
+      "enable": true,
+      "topic_name": "/piper/front/color/compressed",
+      "type_name": "sensor_msgs/msg/CompressedImage",
+      "schema_text": "std_msgs/Header header\nstring format\nuint8[] data\n================================================================================\nMSG: std_msgs/Header\nuint32 seq\ntime stamp\nstring frame_id\n",
+      "default_fps": 30,
+      "producer": "orbbec_node",
+      "description": "前视 Orbbec Gemini 335 彩色,jpeg 压缩"
     }
   ]
 }

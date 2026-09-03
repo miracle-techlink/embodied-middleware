@@ -19,6 +19,10 @@ WS="$SELF"
 PY="$HOME/miniconda3/envs/data_collect/bin/python"
 CAN_IFACE="${CAN_IFACE:-can0}"
 MODE="${1:-teleop}"
+# 相机:CAMERA=1 时起两路 Orbbec(腕部彩+深 / 前视彩)。默认不开(纯关节采集)。
+CAMERA="${CAMERA:-0}"
+WRIST_SN="${WRIST_SN:-CP0CB530016X}"   # 腕部 Orbbec Gemini 335
+FRONT_SN="${FRONT_SN:-CP0CB53000DX}"   # 前视 Orbbec Gemini 335
 
 source /opt/ros/jazzy/setup.bash
 export PYTHONPATH="/opt/ros/jazzy/lib/python3.12/site-packages:$WS/src/middleware"
@@ -27,6 +31,7 @@ stop_all() {
     echo "== 停 PiPER 链路(SIGTERM,arm 节点 estop+disable 从臂)…"
     pkill -TERM -f "middleware.nodes.arms.piper_arm_node" || true
     pkill -TERM -f "middleware.nodes.leaders.piper_leader_node" || true
+    pkill -TERM -f "middleware.nodes.cameras.orbbec_node" || true
 }
 trap stop_all EXIT INT TERM
 
@@ -60,7 +65,46 @@ sleep 2
     > "$L_LEADER" 2>&1 &
 sleep 4
 
+# 相机(可选):两路 Orbbec Gemini 335。**顺序启动**(Orbbec 同时 connect 会竞争 USB 资源,
+# 后起的那个 uvc_open -6,踩过 2026-09-04):wrist warmup 完再起 front。
+if [[ "$CAMERA" == "1" ]]; then
+    echo "== 起相机:腕部 $WRIST_SN(彩+深)→ 前视 $FRONT_SN(彩),顺序 warmup"
+    # 复位仅在设备卡死时需要(ORBBEC_RESET=1):复位会改 USB 路径+重新枚举,反而易起不来。
+    # 平时顺序启动(wrist warmup 完再起 front)即可避开 uvc_open 竞争。默认不复位。
+    if [[ "${ORBBEC_RESET:-0}" == "1" ]]; then
+      echo "== 软复位 Orbbec(2bc5:0800,sysfs authorized 翻转)"
+      for d in /sys/bus/usb/devices/*; do
+        if [ -f "$d/idVendor" ] && [ "$(cat "$d/idVendor")" = "2bc5" ] && [ "$(cat "$d/idProduct")" = "0800" ]; then
+          echo 0 | sudo -n tee "$d/authorized" >/dev/null 2>&1 || true
+        fi
+      done
+      sleep 1
+      for d in /sys/bus/usb/devices/*; do
+        if [ -f "$d/idVendor" ] && [ "$(cat "$d/idVendor")" = "2bc5" ] && [ "$(cat "$d/idProduct")" = "0800" ]; then
+          echo 1 | sudo -n tee "$d/authorized" >/dev/null 2>&1 || true
+        fi
+      done
+      sleep 6  # 复位后重新枚举慢,多等
+    fi
+    "$PY" -m middleware.nodes.cameras.orbbec_node --ros-args \
+        -p serial:="$WRIST_SN" -p use_depth:=true \
+        -p color_topic:=/piper/wrist/color/compressed -p depth_topic:=/piper/wrist/depth/compressed \
+        -p registry_json:="$WS/src/middleware/config/piper_msg_center.json" \
+        > "$SESS/orbbec_wrist.log" 2>&1 &
+    sleep 18  # wrist warmup 完(固件会话建立)再起 front
+    "$PY" -m middleware.nodes.cameras.orbbec_node --ros-args \
+        -p serial:="$FRONT_SN" -p use_depth:=false \
+        -p color_topic:=/piper/front/color/compressed -p depth_topic:=/piper/front/depth/compressed \
+        -p registry_json:="$WS/src/middleware/config/piper_msg_center.json" \
+        > "$SESS/orbbec_front.log" 2>&1 &
+    sleep 18  # front warmup
+fi
+
 ros2 topic list | grep -q "/piper/leader/joint_state" || {
     echo "!! /piper/leader/joint_state 没起来,查 $L_LEADER"; exit 1; }
 echo "== PiPER 链路运行中: /piper/joint_state(从臂) + /piper/leader/joint_state(主臂)。Ctrl-C 全停。"
+if [[ "$CAMERA" == "1" ]]; then
+    ros2 topic list | grep -q "/piper/wrist/color/compressed" && echo "   相机: /piper/wrist/{color,depth} + /piper/front/color 已发" \
+        || echo "   !! 相机 topic 未见,查 $SESS/orbbec_*.log(Orbbec warmup 慢,可再等等)"
+fi
 wait

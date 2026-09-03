@@ -39,14 +39,20 @@ class OrbbecNode(Node):
         self.declare_parameter("use_depth", True)
         self.declare_parameter("jpeg_quality", 90)
         self.declare_parameter("registry_json", "")
+        # topic 前缀:默认 /rebot/wrist(向后兼容);piper 侧传 /piper/wrist 或 /piper/front
+        self.declare_parameter("color_topic", "")
+        self.declare_parameter("depth_topic", "")
         # 曝光锁定: warmup 后让 AE 再收敛 N 秒, 读出当前 exposure/gain 关自动锁死
         # (重启会话间画面分布恒定 —— 相机重启不再是策略观测漂移源)。0=始终自动。
         self.declare_parameter("lock_after_s", 8.0)
 
         reg = TopicRegistry(self.get_parameter("registry_json").value or None)
-        color_spec = reg.require("/rebot/wrist/color/compressed")
-        depth_spec = reg.require("/rebot/wrist/depth/compressed")
+        color_topic = str(self.get_parameter("color_topic").value) or "/rebot/wrist/color/compressed"
+        depth_topic = str(self.get_parameter("depth_topic").value) or "/rebot/wrist/depth/compressed"
         self._use_depth = bool(self.get_parameter("use_depth").value)
+        color_spec = reg.require(color_topic)
+        # 只在启用深度时才要求 depth topic 已注册(前视相机无深度,registry 不含其 depth 条目)
+        depth_spec = reg.require(depth_topic) if self._use_depth else None
         self._jpeg_quality = int(self.get_parameter("jpeg_quality").value)
         fps = int(self.get_parameter("fps").value)
 
