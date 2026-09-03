@@ -26,9 +26,15 @@ def validate(profile: dict) -> list[str]:
             errors.append(f"devices.{name}.kind 非法: {dev.get('kind')!r}")
         if not dev.get("node"):
             errors.append(f"devices.{name}.node 不能为空")
-        for role, suffix in dev.get("topics", {}).items():
+        topics = dev.get("topics", {})
+        for role, suffix in topics.items():
             if not isinstance(suffix, str) or not suffix.strip("/"):
                 errors.append(f"devices.{name}.topics.{role} 非法")
+        for role, spec in dev.get("health", {}).get("streams", {}).items():
+            if role not in topics:
+                errors.append(f"devices.{name}.health.streams.{role} 未对应 topics.{role}")
+            elif not isinstance(spec, dict) or float(spec.get("min_hz", 0)) <= 0:
+                errors.append(f"devices.{name}.health.streams.{role}.min_hz 必须大于 0")
     for mode in profile["modes"]:
         try:
             device_names(profile, mode)

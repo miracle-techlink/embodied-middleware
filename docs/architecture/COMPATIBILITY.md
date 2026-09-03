@@ -7,6 +7,7 @@
 - `~/middleware/start_teleop.sh`、`start_infer.sh`、`start_msg_center.sh`
 - `record_ros2.sh`、`record_rebot_gated_ros2.sh`、`watchdog.sh`
 - `rebot_doctor.sh`、`rebot_watch.sh`、`rebot_rate.py`、`rebot_enable.py`、`rebot_go_home.py`
+- 新多机入口:`start_rig.sh`、`rig_doctor.sh`、`rig_watchdog.sh`(不替代旧入口)
 
 ros2/ 根入口是兼容 wrapper,canonical 实现在 `ros2/launch/`、`ros2/runtime/`、`ros2/admin/`。
 脚本参数、环境变量、日志目录和 SIGTERM 行为必须保持不变;不得用 `kill -9` 关闭机械臂。

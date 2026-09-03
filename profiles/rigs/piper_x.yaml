@@ -29,6 +29,9 @@ devices:
     topics:
       state: joint_state
       cmd: joint_cmd
+    health:
+      streams:
+        state: {min_hz: 25}
 
   front_cam:
     kind: camera
@@ -38,6 +41,9 @@ devices:
       registry_json: src/middleware/config/piper_msg_center.json
     topics:
       color: front/color/compressed
+    health:
+      streams:
+        color: {min_hz: 10}
 
 lerobot:
   robot_type: ros2_piper_follower

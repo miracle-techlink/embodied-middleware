@@ -23,6 +23,9 @@ devices:
       port: /dev/ttyCH341USB0
     topics:
       state: leader/joint_state
+    health:
+      streams:
+        state: {min_hz: 20}
 
   follower:
     kind: arm
@@ -35,6 +38,9 @@ devices:
     topics:
       state: follower/joint_state
       cmd: follower/joint_cmd
+    health:
+      streams:
+        state: {min_hz: 50}
 
   front_cam:
     kind: camera
@@ -43,6 +49,9 @@ devices:
       device: /dev/video0
     topics:
       color: front/color/compressed
+    health:
+      streams:
+        color: {min_hz: 10}
 
   wrist_cam:
     kind: camera
@@ -55,6 +64,10 @@ devices:
     topics:
       color: wrist/color/compressed
       depth: wrist/depth/compressed
+    health:
+      streams:
+        color: {min_hz: 10}
+        depth: {min_hz: 10}
 
   teleop_map:
     kind: control

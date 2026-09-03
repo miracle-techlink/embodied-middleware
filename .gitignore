@@ -12,3 +12,8 @@ datasets/
 
 # 每台采集机的本地 profile 覆盖(序列号、设备路径、密钥引用)
 profiles/local/overrides.yaml
+
+# 运行期日志与旧日志目录(~/middleware 软链指向 ros2/)
+logs/
+ros2/logs/
+ros2/Log/

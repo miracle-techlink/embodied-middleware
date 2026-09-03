@@ -11,9 +11,9 @@
 
 ## 代码入口
 
-- ROS2 启动：`ros2/launch/`
-- ROS2 录制与看门狗：`ros2/runtime/`
-- ROS2 体检和运维：`ros2/admin/`
+- ROS2 启动：`ros2/launch/`；多机入口 `ros2/start_rig.sh`
+- ROS2 录制与看门狗：`ros2/runtime/`；多机入口 `ros2/rig_watchdog.sh`
+- ROS2 体检和运维：`ros2/admin/`；多机入口 `ros2/rig_doctor.sh`
 - ROS2 Python 包：`ros2/src/middleware/middleware/`
 - LeRobot 插件源：`lerobot_plugins/plugins/`
 - LeRobot 插件安装器：`lerobot_plugins/installers/`

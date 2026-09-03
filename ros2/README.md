@@ -9,6 +9,13 @@ AgilexCobotMagic 的 msg_center JSON。控制回路(主臂→映射→从臂)由
 > 同协议后端,节点只剩 ROS 层)、`nodes/{arms,leaders,cameras,control,benchmarks}`、
 > `maintenance/` 分层。根目录的 start_*/record_*/rebot_* 全部是兼容 wrapper,旧用法不破。
 > 详见 docs/architecture/DIRECTORY_LAYOUT.md 与 docs/architecture/COMPATIBILITY.md。
+>
+> **多机 profile(2026-09-03 起)**:仓库根 `profiles/rigs/<rig>.yaml` 描述每台采集机的
+> 命名空间、mode、设备、topic 后缀与健康阈值;本机覆盖放 git 忽略的
+> `profiles/local/overrides.yaml`。新入口:
+> `./start_rig.sh <mode> --rig <rig>`(安全 SIGTERM 守护)、
+> `./rig_doctor.sh <mode> --rig <rig>`、`./rig_watchdog.sh check|heal|watch`。
+> 旧 `start_msg_center.sh` 与 reBot 固定工具继续兼容。
 
 ## 拓扑
 

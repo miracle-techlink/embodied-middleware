@@ -8,9 +8,9 @@
 
 ```text
 ros2/
-├── launch/       启动:start_msg_center(引擎)、start_teleop、start_infer
-├── runtime/      运行期:record_ros2、record_rebot_gated_ros2(.sh/.py)、watchdog
-├── admin/        运维体检:rebot_doctor、rebot_watch、rebot_rate、rebot_enable、rebot_go_home
+├── launch/       启动:start_msg_center(引擎)、start_teleop、start_infer、start_rig(profile)
+├── runtime/      运行期:record_ros2、record_rebot_gated_ros2(.sh/.py)、watchdog、rig_watchdog(profile)
+├── admin/        运维体检:rebot_doctor、rebot_watch、rebot_rate、rebot_enable、rebot_go_home、rig_doctor(profile)
 ├── src/middleware/
 │   ├── middleware/
 │   │   ├── core/             topic_registry(JSON 话题注册表读取)
@@ -39,6 +39,9 @@ ros2/
 - 注册表/QoS/schema 等节点公共依赖 → `core/`;
 - 被 shell 脚本和节点共同调用的运维实现 → `maintenance/`(shell 入口在 `scripts/` 留 wrapper);
 - 一次性起停编排 → `launch/`;录制/守护长跑 → `runtime/`;只读体检/手工干预 → `admin/`。
+- 多机配置只放仓库根 `profiles/rigs/*.yaml`;本机序列号/设备路径放 git 忽略的
+  `profiles/local/overrides.yaml`。新机器使用 `start_rig.sh`、`rig_doctor.sh`、
+  `rig_watchdog.sh`,旧 reBot 固定入口继续兼容。
 
 ## lerobot_plugins/
 
