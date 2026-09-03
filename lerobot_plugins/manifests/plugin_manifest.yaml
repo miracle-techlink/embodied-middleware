@@ -1,0 +1,29 @@
+# 插件清单 —— installers/ 复制进 LeRobot 源码树的唯一权威清单
+# 改动插件目录名/新增插件时同步本表;installers 不再各处硬编码散列。
+#
+# 字段:
+#   source   本仓 lerobot_plugins/plugins/ 下的相对路径
+#   dest     复制到 LeRobot 源码树的目标目录(相对 src/lerobot/)
+#   register 复制后需要幂等追加进对应 __init__.py 的注册 import 行(空 = 无需注册)
+
+- source: robots/rebot_follower
+  dest: robots/rebot_follower
+  register:
+    file: robots/__init__.py
+    line: "from . import rebot_follower  # noqa: F401"
+
+- source: teleoperators/starai_violin_leader
+  dest: teleoperators/starai_violin_leader
+  register:
+    file: teleoperators/__init__.py
+    line: "from . import starai_violin_leader  # noqa: F401"
+
+- source: teleoperators/starai_to_rebot_leader
+  dest: teleoperators/starai_to_rebot_leader
+  register:
+    file: teleoperators/__init__.py
+    line: "from . import starai_to_rebot_leader  # noqa: F401"
+
+- source: cameras/orbbec
+  dest: cameras/orbbec
+  register: []   # 注册由 install_orbbec.sh 的核心补丁完成(工厂分发 + import_utils)

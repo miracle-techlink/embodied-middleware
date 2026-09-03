@@ -1,17 +1,5 @@
-import fcntl, os, re, subprocess
-USBDEVFS_RESET = ord('U') << 8 | 20
-# find all Orbbec 2bc5:0840 bus/dev
-out = subprocess.check_output(["lsusb"]).decode()
-for line in out.splitlines():
-    m = re.match(r"Bus (\d+) Device (\d+): ID 2bc5:0840", line)
-    if not m:
-        continue
-    bus, dev = m.group(1), m.group(2)
-    path = f"/dev/bus/usb/{bus}/{dev}"
-    try:
-        fd = os.open(path, os.O_WRONLY)
-        fcntl.ioctl(fd, USBDEVFS_RESET, 0)
-        os.close(fd)
-        print(f"[reset OK] {path}  ({line.strip()})")
-    except Exception as e:
-        print(f"[reset FAIL] {path}: {type(e).__name__}: {e}")
+#!/usr/bin/env python3
+"""旧入口兼容 wrapper; canonical 实现位于 tools/hardware/usb/usbreset_orbbec.py."""
+from pathlib import Path
+import runpy
+runpy.run_path(str(Path(__file__).parents[1] / "tools/hardware/usb/usbreset_orbbec.py"), run_name="__main__")

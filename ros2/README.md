@@ -4,6 +4,12 @@
 AgilexCobotMagic 的 msg_center JSON。控制回路(主臂→映射→从臂)由节点自持 100Hz,
 与录制循环彻底解耦;录制只是被动订阅。
 
+> **目录分类(2026-09-03 起)**:脚本按 `launch/`(启动)/`runtime/`(录制与守护)/
+> `admin/`(体检运维)分层;Python 包按 `core/`、`backends/`、`nodes/{arms,leaders,
+> cameras,control,benchmarks}`、`maintenance/` 分层。根目录的 start_*/record_*/
+> rebot_* 全部是兼容 wrapper,旧用法不破。详见 ../docs/architecture/DIRECTORY_LAYOUT.md
+> 与 ../docs/architecture/COMPATIBILITY.md。
+
 ## 拓扑
 
 ```
