@@ -120,8 +120,8 @@ class PiperSdkBackend(PiperBackendBase):
         with self._lock:
             j = self._piper.GetArmJointMsgs()
             g = self._piper.GetArmGripperMsgs()
-        joints = [getattr(j, f"joint_{i}") / _DEG_TO_SDK for i in range(1, 7)]
-        gripper_mm = g.grippers_angle / _MM_TO_SDK
+        joints = [getattr(j.joint_state, f"joint_{i}") / _DEG_TO_SDK for i in range(1, 7)]
+        gripper_mm = g.gripper_state.grippers_angle / _MM_TO_SDK
         return joints, gripper_mm, self._enabled
 
     def send_cmd(self, joints_deg: list[float], gripper_mm: float) -> None:

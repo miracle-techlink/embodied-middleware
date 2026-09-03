@@ -47,3 +47,9 @@
   register:
     file: teleoperators/__init__.py
     line: "from . import ros2_rebot_teleop  # noqa: F401"
+
+- source: teleoperators/ros2_piper_teleop
+  dest: teleoperators/ros2_piper_teleop
+  register:
+    file: teleoperators/__init__.py
+    line: "from . import ros2_piper_teleop  # noqa: F401"
