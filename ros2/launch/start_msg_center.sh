@@ -85,6 +85,16 @@ ros2 topic list | grep rebot || { echo "!! 没有 topic 起来,查日志"; exit 
 if [[ "$MODE" == "infer" ]]; then
     echo "== 消息中心运行中 [推理模式:无 leader/teleop_map,follower 只听策略]。Ctrl-C 全停。"
 else
+    # 端到端跟随自检:主臂动→映射出→从臂到(leader/cmd/state 三 topic 逐关节断言)。
+    # 判的是数据正确性,不是管道通不通;不动臂,靠的是启动 ramp 收敛的自然运动。
+    # FOLLOW_CHECK=0 关(只想起链路不想自检时);失败不杀链路,只警告并提示交互定位。
+    if [[ "${FOLLOW_CHECK:-1}" == "1" ]]; then
+        echo "== 跟随链路自检(采样 ${FOLLOW_CHECK_SEC:-4}s;FOLLOW_CHECK=0 可关)…"
+        if ! SECONDS="${FOLLOW_CHECK_SEC:-4}" "$PY" "$WS/runtime/follow_check.py"; then
+            echo "!! 跟随自检未通过 —— 从臂可能有关节不动/方向反。逐关节定位:"
+            echo "     bash $WS/../tools/diagnostics/joint_sweep.sh"
+        fi
+    fi
     echo "== 消息中心运行中 [采集模式]。录制另开终端跑 record(见 README)。Ctrl-C 全停。"
 fi
 wait
