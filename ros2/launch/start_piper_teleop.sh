@@ -113,4 +113,27 @@ if [[ "$CAMERA" == "1" ]]; then
     ros2 topic list | grep -q "/piper/wrist/color/compressed" && echo "   相机: /piper/wrist/{color,depth} + /piper/front/color 已发" \
         || echo "   !! 相机 topic 未见,查 $SESS/orbbec_*.log(Orbbec warmup 慢,可再等等)"
 fi
+
+# —— 参考零位自检(可选,纯只读,不动臂)——
+# 已建档(piper_home.json)且 HOME_CHECK!=0 且终端可交互时:提示把主/从臂摆到
+# 建档时的参考姿态,回车后自动 verify 比对。无档案则只提示建档命令。
+# 背景:PiPER 零位在固件/驱动器 EEPROM(JointConfig 0xAE),PiperInit 不回零;
+#       跨 session 数据/推理一致性靠「参考姿态读数」与档案比对来保证。
+if [[ "${HOME_CHECK:-1}" != "0" && -t 0 ]]; then
+    PIPER_HOME_FILE="${PIPER_HOME_FILE:-$HOME/.cache/huggingface/lerobot/calibration/piper_home.json}"
+    ZC="$WS/../tools/diagnostics/piper_zero_check.sh"
+    if [ -f "$PIPER_HOME_FILE" ]; then
+        echo "== 参考零位自检:请把主/从臂摆到建档参考姿态并扶稳,回车开始回读比对(只读,不动臂)…"
+        read -r _
+        if bash "$ZC" verify --out "$PIPER_HOME_FILE"; then
+            echo "== 零位自检通过(与档案一致,可采集)。"
+        else
+            echo "!! 零位自检未过(见上方逐关节结果)——先查机械/零位,别直接开录!"
+        fi
+    else
+        echo "== (提示)尚无参考零位档案: $PIPER_HOME_FILE"
+        echo "   摆好参考姿态后建档: bash $ZC archive --label '参考姿态名'"
+        echo "   (之后每次起链会自动比对;HOME_CHECK=0 可关本自检)"
+    fi
+fi
 wait

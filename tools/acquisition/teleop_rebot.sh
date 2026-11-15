@@ -26,15 +26,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "${PREFLIGHT:-1}" = "1" ]; then
   if [ "$(cat /sys/class/net/${CAN}/operstate 2>/dev/null)" != "up" ]; then
     echo "[preflight] $CAN 不在 UP,自动拉起(sudo 可能问密码)..."
-    sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" \
-      || { echo "[preflight] $CAN 拉起失败 → 手动跑: sudo bash $SCRIPT_DIR/setup_rebot_can.sh"; exit 1; }
+    sudo "$SCRIPT_DIR/../hardware/can/setup_rebot_can.sh" "$CAN" \
+      || { echo "[preflight] $CAN 拉起失败 → 手动跑: sudo bash $SCRIPT_DIR/../hardware/can/setup_rebot_can.sh"; exit 1; }
   fi
   if [ "${ARM_PROBE:-1}" = "1" ]; then
-    if ! "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN"; then
+    if ! "$PY" "$SCRIPT_DIR/../diagnostics/probe_arm.py" "$CAN"; then
       echo "[preflight] 电机无 ACK,自动重拉 CAN 再探一次..."
-      sudo "$SCRIPT_DIR/setup_rebot_can.sh" "$CAN" || true
+      sudo "$SCRIPT_DIR/../hardware/can/setup_rebot_can.sh" "$CAN" || true
       sleep 1
-      "$PY" "$SCRIPT_DIR/probe_arm.py" "$CAN" \
+      "$PY" "$SCRIPT_DIR/../diagnostics/probe_arm.py" "$CAN" \
         || { echo "[preflight] 重拉 CAN 后电机仍静默 → 检查:臂电源开关 / 急停按钮 / CAN 线。"; exit 1; }
     fi
   fi

@@ -45,6 +45,7 @@ class StaraiViolinLeader(Teleoperator):
         self.config = config
         self._uart: serial.Serial | None = None
         self._uservo = None
+        self.bus_lock = threading.Lock()  # 读包线程 vs 悬停保持指令 的总线互斥(防字节交错)
         self._servo_ids = [*config.arm_servo_ids, config.gripper_servo_id]
         self._keys = [f"joint_{i + 1}.pos" for i in range(len(config.arm_servo_ids))] + ["gripper.pos"]
 
@@ -128,23 +129,24 @@ class StaraiViolinLeader(Teleoperator):
                 for i, sid in enumerate(self._servo_ids):
                     if self._reader_stop.is_set():
                         return
-                    us.send_request(us.CODE_QUERY_SERVO_ANGLE, struct.pack("<B", sid))
-                    t0 = time.time()
-                    got = False
-                    while not got and time.time() - t0 < 0.006:
-                        w = us.uart.in_waiting
-                        if w:
-                            for b in us.uart.read(w):
-                                us.pkt_buffer.update(struct.pack("<B", b))
-                            while us.pkt_buffer.has_valid_packet():
-                                code, params = self._Packet.unpack(us.pkt_buffer.get_packet())
-                                handler = us.response_handle_funcs.get(code)
-                                if handler:
-                                    handler(params)
-                                if code == us.CODE_QUERY_SERVO_ANGLE and params and params[0] == sid:
-                                    got = True
-                        else:
-                            time.sleep(0.0002)
+                    with self.bus_lock:
+                        us.send_request(us.CODE_QUERY_SERVO_ANGLE, struct.pack("<B", sid))
+                        t0 = time.time()
+                        got = False
+                        while not got and time.time() - t0 < 0.006:
+                            w = us.uart.in_waiting
+                            if w:
+                                for b in us.uart.read(w):
+                                    us.pkt_buffer.update(struct.pack("<B", b))
+                                while us.pkt_buffer.has_valid_packet():
+                                    code, params = self._Packet.unpack(us.pkt_buffer.get_packet())
+                                    handler = us.response_handle_funcs.get(code)
+                                    if handler:
+                                        handler(params)
+                                    if code == us.CODE_QUERY_SERVO_ANGLE and params and params[0] == sid:
+                                        got = True
+                            else:
+                                time.sleep(0.0002)
                     if got:
                         now = time.time()
                         new_ang = float(us.servos[sid].angle)   # 原始角,±180 回绕
@@ -250,6 +252,26 @@ class StaraiViolinLeader(Teleoperator):
 
     def send_feedback(self, feedback: dict[str, float]) -> None:
         pass
+
+    def hover_hold(self) -> None:
+        """舵机角度保持。注意:被动采集型 leader(力矩主权在臂盒 MCU)上无效 ——
+        实测 +8° 指令仅走出 1.1°/0.2A 即被夺回;仅力矩权限开放的硬件(HD 等)可用。"""
+        if self._uservo is None:
+            return
+        with self.bus_lock:
+            for sid in self._servo_ids:
+                ang = self._uservo.servos[sid].angle
+                if ang is None:
+                    continue
+                self._uservo.set_servo_angle(sid, float(ang), interval=80)
+
+    def hover_release(self) -> None:
+        """回阻尼。同 hover_hold,被动采集型 leader 上臂盒 MCU 本就不放权,调用无副作用。"""
+        if self._uservo is None:
+            return
+        with self.bus_lock:
+            for sid in self._servo_ids:
+                self._uservo.set_damping(sid, 0)
 
     def disconnect(self) -> None:
         if getattr(self, "_reader_stop", None) is not None:

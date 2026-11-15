@@ -64,6 +64,9 @@ if [ "${CAMERA:-0}" = "1" ]; then
 else
     VIDEO_ARG=(--dataset.video=false --dataset.rgb_encoder.vcodec=h264)
 fi
+# 深度编码提速:x265 preset 只改速度/体积,无损仍位精确(rebot README 实测 420帧 13.7s→3.3s)。
+# 单条保存因此从 ~15-40s 压到 ~4-6s,配合后台保存+摆位重叠,几乎无感。
+VIDEO_ARG+=(--dataset.depth_encoder.preset="${DEPTH_PRESET:-ultrafast}")
 
 exec "$BIN_DIR/python" "$WS/runtime/record_piper_gated_ros2.py" \
     --robot.type=ros2_piper_follower --robot.id=piper_follower1 \
